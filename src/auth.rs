@@ -21,7 +21,7 @@ impl Config {
 
 pub async fn verify_session(config: &Config, username: &str, session_token: &str) -> Result<bool, Box<dyn Error + Send + Sync>> {
     let trimmed_session_token = session_token.trim();
-    info!(target: "auth", "Verifying session token: {}", trimmed_session_token);
+    info!(target: "auth", "Verifying session token for user: {}", username);
     let request_json = serde_json::json!({
         "username": username,
         "session_token": trimmed_session_token,
@@ -40,7 +40,6 @@ pub async fn verify_session(config: &Config, username: &str, session_token: &str
         .await?;
 
     let result: serde_json::Value = serde_json::from_str(&response)?;
-    println!("Response: {:?}", result);
 
     if let Some(error) = result["error"].as_str() {
         error!(target: "auth", "Error verifying session: {}", error);

@@ -8,10 +8,11 @@ use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 
+mod config;
 mod auth;
 mod conn_handler;
 
-use auth::Config;
+use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
 
 fn init_tracing() {
@@ -22,7 +23,7 @@ fn init_tracing() {
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     init_tracing();
 
-    let config = Config::load_config();
+    let config = Config::load_config().expect("Failed to load config");
 
     tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.online_mode, config.host, config.port);
 
@@ -44,7 +45,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 tracing::info!(target: "server", "New connection accepted");
 
                 let active_connections = active_connections.clone();
-                let chat_rooms = chat_rooms.clone();
                 let active_users = active_users.clone();
                 let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
@@ -54,7 +54,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                     conns.push(socket.clone());
                 }
 
-                tokio::spawn(handle_connection(socket, active_connections, chat_rooms, active_users, config_clone));
+                tokio::spawn(handle_connection(socket, active_connections, active_users, config_clone));
             },
             _ = signal::ctrl_c() => {
                 tracing::info!("Shutdown signal received, notifying all clients...");
@@ -68,7 +68,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                     });
                 }
 
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                sleep(Duration::from_secs(5)).await;
 
                 tracing::info!("Server shutting down after 5 seconds.");
                 break;

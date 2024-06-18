@@ -1,23 +1,6 @@
 use std::error::Error;
-use serde::Deserialize;
 use tracing::{error, info};
-
-#[derive(Debug, Deserialize, Clone)]
-pub struct Config {
-    pub online_mode: bool,
-    pub host: String,
-    pub port: u16,
-    pub api_key: String,
-}
-
-impl Config {
-    pub fn load_config() -> Self {
-        let contents = std::fs::read_to_string("config.toml")
-            .expect("Something went wrong reading the file");
-
-        toml::from_str(&contents).unwrap_or_else(|e| panic!("Error deserializing config: {}", e))
-    }
-}
+use crate::config::Config;
 
 pub async fn verify_session(config: &Config, username: &str, session_token: &str) -> Result<bool, Box<dyn Error + Send + Sync>> {
     let trimmed_session_token = session_token.trim();

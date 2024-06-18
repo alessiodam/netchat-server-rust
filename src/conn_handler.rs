@@ -1,6 +1,7 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, Mutex};
 use std::sync::Arc;
+use tracing::{info, warn, error, debug};
 
 use crate::auth::{Config, verify_session};
 
@@ -19,7 +20,7 @@ pub async fn handle_connection(
                     return;
                 }
                 let message = String::from_utf8_lossy(&buf[..n]);
-                tracing::debug!(message="Received message", msg=%message);
+                debug!(message="Received message", msg=%message);
 
                 if message.starts_with("AUTH:") {
                     let auth_parts: Vec<&str> = message.splitn(3, ':').collect();
@@ -28,7 +29,7 @@ pub async fn handle_connection(
                         let session_token = auth_parts[2].trim();
 
                         if config.online_mode {
-                            tracing::info!(target: "auth", "Authenticating user: {}", username);
+                            info!(target: "auth", "Authenticating user: {}", username);
 
                             match verify_session(&config, username, session_token).await {
                                 Ok(is_valid_session) => {
@@ -39,28 +40,29 @@ pub async fn handle_connection(
                                     }
                                 },
                                 Err(e) => {
-                                    let _ = socket.write_all(b"AUTH_ERROR\n").await;
+                                    let error_message = format!("AUTH_ERROR:{}\n", e);
+                                    let _ = socket.write_all(error_message.as_bytes()).await;
                                 },
                             }
                         } else {
-                            tracing::info!(target: "auth", "Server not in online mode, marking user: {} as authenticated", username);
+                            info!(target: "auth", "Server not in online mode, marking user: {} as authenticated", username);
                             let _ = socket.write_all(b"AUTH_SUCCESS\n").await;
                         }
                     } else {
-                        tracing::warn!(target: "auth", "Invalid AUTH message");
+                        warn!(target: "auth", "Invalid AUTH message");
                         let _ = socket.write_all(b"AUTH_INVALID\n").await;
                     }
                 } else {
-                    tracing::info!(target: "server", "Received non-AUTH message or server not in online mode");
+                    info!(target: "server", "Received non-AUTH message or server not in online mode");
                     let _ = socket.write_all(b"INVALID_MESSAGE\n").await;
                 }
             }
-            Err(e) => tracing::error!(target: "server", "Failed to read from socket: {}", e),
+            Err(e) => error!(target: "server", "Failed to read from socket: {}", e),
         }
 
-        tracing::info!(target: "server", "User marked as logged in.");
+        info!(target: "server", "User marked as logged in.");
         socket.shutdown().await.unwrap_or_else(|_| {
-            tracing::error!(target: "server", "Failed to shutdown socket");
+            error!(target: "server", "Failed to shutdown socket");
         });
     }
 

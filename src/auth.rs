@@ -44,7 +44,7 @@ pub async fn verify_session(config: &Config, username: &str, session_token: &str
 
     if let Some(error) = result["error"].as_str() {
         error!(target: "auth", "Error verifying session: {}", error);
-        return Ok(false);
+        return Err(format!("AUTH_ERROR:{}", error).into());
     }
 
     if result["valid"].as_bool().unwrap_or(false) {

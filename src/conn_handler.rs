@@ -140,7 +140,6 @@ async fn broadcast_message(
 ) {
     info!(target: "server", "Broadcasting message: {}", message);
 
-    // Broadcast to all active connections
     let connections = active_connections.read().await;
     for client in connections.iter() {
         let client = client.clone();

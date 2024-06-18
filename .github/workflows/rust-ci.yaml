@@ -1,58 +1,41 @@
-name: Build Rust Project
+name: Publish
 
 on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
-  build:
+  publish:
+    name: Publish for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        target:
-          - x86_64-pc-windows-gnu
+        include:
+          - os: ubuntu-latest
+            artifact_name: netchat-server
+            asset_name: netchat-server-linux-amd64
+          - os: windows-latest
+            artifact_name: netchat-server.exe
+            asset_name: netchat-server-windows-amd64
+          - os: macos-latest
+            artifact_name: netchat-server
+            asset_name: netchat-server-macos-amd64
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pkg-config libssl-dev gcc-mingw-w64-x86-64
-
-      - name: Add target
-        run: rustup target add ${{ matrix.target }}
-
+      - uses: actions/checkout@v3
       - name: Build
-        env:
-          OPENSSL_DIR: /usr
-        run: cargo build --target ${{ matrix.target }} --release
-
-      - name: Upload artifact
-        if: success()
-        uses: actions/upload-artifact@v2
-        with:
-          name: ${{ matrix.target }}-build
-          path: target/${{ matrix.target }}/release/
-
-      - name: Upload release
-        if: success()
+        run: cargo build --release --locked
+      - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/${{ matrix.target }}/release/*
-          file_glob: true
+          file: target/release/${{ matrix.artifact_name }}
+          asset_name: ${{ matrix.asset_name }}
+          tag: ${{ github.ref }}

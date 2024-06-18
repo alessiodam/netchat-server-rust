@@ -1,5 +1,6 @@
 use std::error::Error;
 use serde::Deserialize;
+use crate::CONFIG_PATH;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -26,7 +27,7 @@ pub struct WebConfig {
 
 impl Config {
     pub fn load_config() -> Result<Self, Box<dyn Error>> {
-        let contents = std::fs::read_to_string("config.toml")
+        let contents = std::fs::read_to_string(CONFIG_PATH)
             .map_err(|e| format!("Failed to read config file: {}", e))?;
 
         toml::from_str(&contents).map_err(|e| format!("Error deserializing config: {}", e).into())

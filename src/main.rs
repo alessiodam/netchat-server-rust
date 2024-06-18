@@ -7,6 +7,8 @@ use tokio::signal;
 use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
+use std::fs;
+use reqwest;
 
 mod config;
 mod auth;
@@ -16,13 +18,30 @@ mod web_ui;
 use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
 
+const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
+const CONFIG_PATH: &str = "config.toml";
+
 fn init_tracing() {
     fmt::init();
+}
+
+async fn fetch_and_save_config() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let response = reqwest::get(CONFIG_URL).await?;
+    let content = response.text().await?;
+    fs::write(CONFIG_PATH, content)?;
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     init_tracing();
+
+    if !std::path::Path::new(CONFIG_PATH).exists() {
+        tracing::warn!("Config file not found, fetching from remote...");
+        fetch_and_save_config().await.expect("Failed to fetch config file");
+        tracing::info!("Config file fetched and saved as config.toml. Please edit it carefully before restarting the server.");
+        return Ok(());
+    }
 
     let config = Config::load_config().expect("Failed to load config");
 

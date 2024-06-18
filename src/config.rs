@@ -3,12 +3,25 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
+    pub server: ServerConfig,
+    pub web: WebConfig,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ServerConfig {
     pub host: String,
     pub port: u16,
     pub online_mode: bool,
     pub api_key: String,
     pub protect_server: bool,
     pub server_password: String,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct WebConfig {
+    pub enable: bool,
+    pub host: String,
+    pub port: u16,
 }
 
 impl Config {

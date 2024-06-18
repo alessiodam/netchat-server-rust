@@ -20,14 +20,14 @@ pub async fn handle_connection(
     let mut buf = vec![0; 4 * 1024];
     let mut authenticated = false;
     let mut username = String::new();
-    let mut server_password_correct = if config.protect_server { false } else { true };
+    let mut server_password_correct = if config.server.protect_server { false } else { true };
 
     loop {
         let mut socket_guard = socket.lock().await;
         match socket_guard.read(&mut buf).await {
             Ok(n) => {
                 if n == 0 {
-                    return;
+                    break;
                 }
                 let message = String::from_utf8_lossy(&buf[..n]).to_string();
                 debug!(message="Received message", msg=%message);
@@ -42,7 +42,7 @@ pub async fn handle_connection(
                                 username = auth_parts[1].to_string();
                                 let session_token = auth_parts[2].trim();
 
-                                if config.online_mode {
+                                if config.server.online_mode {
                                     info!(target: "auth", "Authenticating user: {}", username);
 
                                     match verify_session(&config, &username, session_token).await {
@@ -96,10 +96,10 @@ pub async fn handle_connection(
                     } else {
                         let _ = socket_guard.write_all(b"NOT_AUTHENTICATED\n").await;
                     }
-                } else if !server_password_correct && config.protect_server {
+                } else if !server_password_correct && config.server.protect_server {
                     if message.starts_with("SERVER_PASS:") {
                         let server_password = message.trim_start_matches("SERVER_PASS:").trim();
-                        if server_password == config.server_password {
+                        if server_password == config.server.server_password {
                             server_password_correct = true;
                             let _ = socket_guard.write_all(b"SERVER_PASS_CORRECT\n").await;
                         } else {

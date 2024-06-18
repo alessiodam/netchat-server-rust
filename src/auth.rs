@@ -16,7 +16,7 @@ pub async fn verify_session(config: &Config, username: &str, session_token: &str
         .json(&request_json)
         .header("Content-Type", "application/json")
         .header("Accept", "application/json")
-        .header("Api-Key", &config.api_key)
+        .header("Api-Key", &config.server.api_key)
         .send()
         .await?
         .text()

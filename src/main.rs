@@ -11,6 +11,7 @@ use tokio::time::{sleep, Duration};
 mod config;
 mod auth;
 mod conn_handler;
+mod web_ui;
 
 use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
@@ -25,9 +26,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let config = Config::load_config().expect("Failed to load config");
 
-    tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.online_mode, config.host, config.port);
+    tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
-    let listener = TcpListener::bind(format!("{}:{}", config.host, config.port)).await?;
+    let listener = TcpListener::bind(format!("{}:{}", config.server.host, config.server.port)).await?;
     let active_connections = Arc::new(RwLock::new(Vec::new()));
     let chat_rooms: ChatRooms = Arc::new(RwLock::new(HashMap::new()));
     let active_users: ActiveUsers = Arc::new(RwLock::new(HashMap::new()));
@@ -35,6 +36,17 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     {
         let mut chat_rooms = chat_rooms.write().await;
         chat_rooms.insert("global".to_string(), Vec::new());
+    }
+
+    if config.web.enable {
+        let web_host = config.web.host.clone();
+        let web_port = config.web.port;
+        let active_connections = Arc::clone(&active_connections);
+        let active_users = Arc::clone(&active_users);
+        let config_clone = config.clone();
+        tokio::spawn(async move {
+            web_ui::run_web_ui(web_host, web_port, active_connections, active_users, config_clone).await;
+        });
     }
 
     tokio::spawn(remove_non_authenticated_connections(active_connections.clone(), active_users.clone()));

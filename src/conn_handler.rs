@@ -1,5 +1,6 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, Mutex};
+use tokio::time::{self, Duration};
 use std::sync::Arc;
 use tracing::{info, warn, error};
 use std::collections::HashMap;
@@ -24,8 +25,10 @@ pub async fn handle_connection(
 
     loop {
         let mut socket_guard = socket.lock().await;
-        match socket_guard.read(&mut buf).await {
-            Ok(n) => {
+        let read_result = time::timeout(Duration::from_millis(100), socket_guard.read(&mut buf)).await;
+
+        match read_result {
+            Ok(Ok(n)) => {
                 if n == 0 {
                     break;
                 }
@@ -126,9 +129,12 @@ pub async fn handle_connection(
                     }
                 }
             }
-            Err(e) => {
+            Ok(Err(e)) => {
                 error!(target: "server", "Failed to read from socket: {}", e);
                 break;
+            }
+            Err(_) => {
+                continue;
             }
         }
     }

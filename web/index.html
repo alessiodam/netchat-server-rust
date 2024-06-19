@@ -8,7 +8,7 @@
         body {
             margin: 0;
             font-family: Arial, sans-serif;
-            background-color: #1a1a1a;
+            background-color: #0d1117;
             color: white;
             display: flex;
         }
@@ -24,73 +24,96 @@
             left: 0;
             top: 0;
         }
+
         .sidebar img {
             width: 30px;
             margin-bottom: 20px;
             cursor: pointer;
         }
+
         .main-content {
             margin-left: 60px;
             padding: 20px;
             width: calc(100% - 60px);
         }
+
         .stats, .user-table {
             padding: 20px;
             margin-bottom: 20px;
         }
+
         .stats {
             display: flex;
             justify-content: space-between;
             background-color: #333;
             border-radius: 10px;
         }
+        
         .stats div {
             text-align: center;
             width: 100%;
         }
+
+        .user-table {
+            font-weight: bold;
+        }
+        
         table {
             width: 100%;
             border-spacing: inherit;
         }
+
         th, td {
             padding: 10px;
             border: 1px solid #444;
             text-align: center;
         }
+
         .status-online {
-            background-color: green;
+            background-color: #5BCF74;
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
         }
+
         .status-banned {
             background-color: black;
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
         }
+
         .status-offline {
             background-color: red;
             color: white;
             padding: 5px 10px;
             border-radius: 5px;
         }
+
         .btn-disconnect, .btn-ban, .btn-tempban {
             color: white;
             padding: 5px 10px;
-            border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-weight: bold;
+            border-width: 1px;
         }
+
         .btn-disconnect {
-            background-color: red;
+            background-color: rgba(189, 44, 0, 0.15);
+            border-color: rgba(189, 44, 0, 0.4);
         }
+
         .btn-ban {
-            background-color: black;
+            background-color: rgb(2, 1, 1);
+            border-color: rgb(10, 9, 9);
         }
+
         .btn-tempban {
-            background-color: orange;
+            background-color: rgba(187, 128, 9, 0.15);
+            border-color: rgba(187, 128, 9, 0.4);
         }
+
         .popup {
             display: none;
             position: fixed;
@@ -102,17 +125,20 @@
             justify-content: center;
             align-items: center;
         }
+
         .popup-content {
             background-color: #444;
             padding: 20px;
             border-radius: 10px;
             text-align: center;
         }
+
         .popup-content input {
             padding: 5px;
             margin: 10px 0;
             width: 80%;
         }
+
         .popup-content button {
             padding: 10px 20px;
             margin: 10px;
@@ -120,6 +146,7 @@
             border-radius: 5px;
             cursor: pointer;
         }
+
         .popup-content .btn-cancel {
             background-color: gray;
         }
@@ -127,12 +154,15 @@
         th:first-of-type {
             border-top-left-radius: 10px;
         }
+
         th:last-of-type {
             border-top-right-radius: 10px;
         }
+
         tr:last-of-type td:first-of-type {
             border-bottom-left-radius: 10px;
         }
+
         tr:last-of-type td:last-of-type {
             border-bottom-right-radius: 10px;
         }

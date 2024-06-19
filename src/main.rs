@@ -8,7 +8,7 @@
  * Therefore, do NOT try to optimize this code.
  * When I wrote it, only God and I knew what we wrote.
  * Increase this counter as a warning to the next one:
- * wasted hours = 3 hours
+ * wasted hours = 4 hours 40 Minutes
 */
 
 use tokio::net::TcpListener;

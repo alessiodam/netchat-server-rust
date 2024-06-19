@@ -1,6 +1,7 @@
 use std::error::Error;
 use serde::Deserialize;
 use crate::CONFIG_PATH;
+use toml;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {

@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tracing::{info, warn, error};
 use std::collections::HashMap;
 use chrono::Utc;
+use rusqlite::Connection;
 
 use crate::auth::verify_session;
 use crate::config::Config;
@@ -17,6 +18,7 @@ pub async fn handle_connection(
     active_connections: Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
     active_users: ActiveUsers,
     config: Config,
+    db_conn: Arc<Mutex<Connection>>,
 ) {
     let mut buf = vec![0; 4 * 1024];
     let mut authenticated = false;
@@ -60,6 +62,7 @@ pub async fn handle_connection(
                                                 socket_guard.flush().await.unwrap();
                                             } else {
                                                 authenticated = true;
+                                                add_or_update_user(&db_conn, &username).await;
                                                 {
                                                     let mut users = active_users.write().await;
                                                     users.insert(username.clone(), Arc::clone(&socket));
@@ -77,6 +80,7 @@ pub async fn handle_connection(
                                 } else {
                                     info!(target: "auth", "Server not in online mode, marking user: {} as authenticated", username);
                                     authenticated = true;
+                                    add_or_update_user(&db_conn, &username).await;
                                     {
                                         let mut users = active_users.write().await;
                                         users.insert(username.clone(), Arc::clone(&socket));
@@ -154,6 +158,8 @@ pub async fn handle_connection(
         let mut users = active_users.write().await;
         users.remove(&username);
     }
+
+    set_user_status(&db_conn, &username, "offline").await;
 }
 
 async fn broadcast_message(
@@ -195,4 +201,24 @@ async fn send_direct_message(active_users: &ActiveUsers, target: &str, message: 
             }
         });
     }
+}
+
+async fn add_or_update_user(db_conn: &Arc<tokio::sync::Mutex<Connection>>, username: &str) {
+    let conn = db_conn.lock().await;
+    let mut stmt = conn.prepare("SELECT username FROM users WHERE username = ?1").unwrap();
+    let user_exists = stmt.exists([username]).unwrap();
+
+    if !user_exists {
+        let mut stmt = conn.prepare("INSERT INTO users (username, status, session_duration, last_online, messages_sent, total_time_online, permission) VALUES (?1, 'online', '0', 'never', 0, '0', 'user')").unwrap();
+        stmt.execute([username]).unwrap();
+    } else {
+        let mut stmt = conn.prepare("UPDATE users SET status = 'online', last_online = ?1 WHERE username = ?2").unwrap();
+        stmt.execute([Utc::now().to_rfc3339().as_str(), username]).unwrap();
+    }
+}
+
+async fn set_user_status(db_conn: &Arc<tokio::sync::Mutex<Connection>>, username: &str, status: &str) {
+    let conn = db_conn.lock().await;
+    let mut stmt = conn.prepare("UPDATE users SET status = ?1 WHERE username = ?2").unwrap();
+    stmt.execute([status, username]).unwrap();
 }

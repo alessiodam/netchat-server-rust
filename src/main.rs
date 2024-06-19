@@ -1,3 +1,16 @@
+/*
+ * NETCHAT Server, in Rust.
+ *
+ * Dear Rust developers/community
+ * Please don't get mad at me if the code is bd
+ * This is only my second project with Rust :(
+ *
+ * Therefore, do NOT try to optimize this code.
+ * When I wrote it, only God and I knew what we wrote.
+ * Increase this counter as a warning to the next one:
+ * wasted hours = 3 hours
+*/
+
 use tokio::net::TcpListener;
 use std::error::Error;
 use tracing_subscriber::fmt;
@@ -9,17 +22,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 use std::fs;
 use reqwest;
+use std::sync::Mutex;
 
 mod config;
 mod auth;
 mod conn_handler;
 mod web_ui;
+mod db;
 
 use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
+use db::init_db;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
 const CONFIG_PATH: &str = "config.toml";
+const DB_PATH: &str = "netchat.db";
 
 fn init_tracing() {
     fmt::init();
@@ -45,6 +62,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let config = Config::load_config().expect("Failed to load config");
 
+    let db_conn = Arc::new(Mutex::new(init_db(DB_PATH)?)); // Use Arc<Mutex<Connection>>
+
     tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
     let listener = TcpListener::bind(format!("{}:{}", config.server.host, config.server.port)).await?;
@@ -63,8 +82,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         let active_connections = Arc::clone(&active_connections);
         let active_users = Arc::clone(&active_users);
         let config_clone = config.clone();
+        let db_conn_clone = Arc::clone(&db_conn);
         tokio::spawn(async move {
-            web_ui::run_web_ui(web_host, web_port, active_connections, active_users, config_clone).await;
+            web_ui::run_web_ui(web_host, web_port, active_connections, active_users, config_clone, db_conn_clone).await;
         });
     }
 
@@ -79,14 +99,16 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 let active_users = active_users.clone();
                 let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
+                let db_conn = Arc::new(tokio::sync::Mutex::new(init_db(DB_PATH)?));
 
                 {
                     let mut conns = active_connections.write().await;
                     conns.push(socket.clone());
                 }
 
-                tokio::spawn(handle_connection(socket, active_connections, active_users, config_clone));
+                tokio::spawn(handle_connection(socket, active_connections, active_users, config_clone, db_conn));
             },
+
             _ = signal::ctrl_c() => {
                 tracing::info!("Shutdown signal received, notifying all clients...");
 

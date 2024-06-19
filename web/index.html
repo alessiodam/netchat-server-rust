@@ -49,7 +49,7 @@
             width: 100%;
         }
         .user-table {
-            width: 100%;
+            width: 97%;
         }
         table {
             width: 100%;
@@ -275,7 +275,7 @@
                         <td>${user.totalTimeOnline}</td>
                         <td>${user.permission}</td>
                         <td>
-                            ${user.status === 'Online' ? '<button class="btn-disconnect">Disconnect</button>' : ''}
+                            ${user.status === 'online' ? '<button class="btn-disconnect">Disconnect</button>' : ''}
                             ${user.permission !== 'Admin' ? '<button class="btn-ban">Ban</button>' : ''}
                             ${user.permission !== 'Admin' ? '<button class="btn-tempban">Temp-Ban</button>' : ''}
                         </td>

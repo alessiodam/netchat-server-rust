@@ -16,9 +16,9 @@ pub fn init_db(path: &str) -> Result<Connection> {
     )?;
     conn.execute(
         "CREATE TABLE IF NOT EXISTS server_info (
-            total_messages INTEGER,
-            total_time_online TEXT,
-            uptime TEXT
+            total_messages BIGINT DEFAULT 0,
+            total_time_online BIGINT DEFAULT 0,
+            uptime BIGINT DEFAULT 0
         )",
         [],
     )?;

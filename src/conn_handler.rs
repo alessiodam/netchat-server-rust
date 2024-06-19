@@ -104,10 +104,11 @@ pub async fn handle_connection(
                             let timestamp = Utc::now().to_rfc3339();
                             let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, message);
                             if recipient == "global" {
-                                broadcast_message(&db_conn, &username, &active_connections, &full_message).await;
+                                broadcast_message(&active_connections, &full_message).await;
                             } else {
-                                send_direct_message(&db_conn, &username, &active_users, recipient, &full_message).await;
+                                send_direct_message(&active_users, recipient, &full_message).await;
                             }
+                            increment_user_sent_messages(&db_conn, &username).await;
                         } else {
                             socket_guard.write_all(b"INVALID_MESSAGE_FORMAT\n").await.unwrap();
                             socket_guard.flush().await.unwrap();
@@ -163,8 +164,6 @@ pub async fn handle_connection(
 }
 
 async fn broadcast_message(
-    db_conn: &Arc<tokio::sync::Mutex<Connection>>,
-    username: &str,
     active_connections: &Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
     message: &str,
 ) {
@@ -185,10 +184,9 @@ async fn broadcast_message(
             }
         });
     }
-    increment_user_sent_messages(&db_conn, &username).await;
 }
 
-async fn send_direct_message(db_conn: &Arc<tokio::sync::Mutex<Connection>>, username: &str, active_users: &ActiveUsers, target: &str, message: &str) {
+async fn send_direct_message(active_users: &ActiveUsers, target: &str, message: &str) {
     let active_users = active_users.read().await;
     if let Some(client) = active_users.get(target) {
         let client = client.clone();
@@ -204,7 +202,6 @@ async fn send_direct_message(db_conn: &Arc<tokio::sync::Mutex<Connection>>, user
             }
         });
     }
-    increment_user_sent_messages(&db_conn, &username).await;
 }
 
 async fn add_or_update_user(db_conn: &Arc<tokio::sync::Mutex<Connection>>, username: &str) {
@@ -232,7 +229,6 @@ async fn increment_user_sent_messages(db_conn: &Arc<tokio::sync::Mutex<Connectio
     let mut stmt = conn.prepare("UPDATE users SET messages_sent = messages_sent + 1 WHERE username = ?1").unwrap();
     stmt.execute([username]).unwrap();
 
-    let conn = db_conn.lock().await;
-    let mut stmt = conn.prepare("UPDATE server_info SET total_messages = total_messages + 1").unwrap();
-    stmt.execute([]).unwrap();
+    let mut stmt2 = conn.prepare("UPDATE server_info SET total_messages = total_messages + 1").unwrap();
+    stmt2.execute([]).unwrap();
 }

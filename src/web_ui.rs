@@ -1,4 +1,4 @@
-use warp::{Filter, Rejection};
+use warp::{Filter, Rejection, reject::custom};
 use std::net::IpAddr;
 use tokio::sync::RwLock;
 use std::sync::{Arc, Mutex};
@@ -21,7 +21,6 @@ struct ServerInfo {
 struct User {
     username: String,
     status: String,
-    session_duration: String,
     last_online: String,
     messages_sent: usize,
     total_time_online: String,
@@ -31,11 +30,6 @@ struct User {
 #[derive(Serialize)]
 struct ActiveConnectionCount {
     count: usize,
-}
-
-#[derive(Serialize)]
-struct ActiveUser {
-    username: String,
 }
 
 #[derive(Serialize)]
@@ -51,15 +45,19 @@ struct UserBanRequest {
 #[derive(Deserialize)]
 struct TempBanRequest {
     username: String,
-    duration: u32,
+    ban_duration: u32,
 }
+
+#[derive(Debug)]
+struct DatabaseError;
+impl warp::reject::Reject for DatabaseError {}
 
 pub async fn run_web_ui(
     host: String,
     port: u16,
     active_connections: Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>,
     active_users: ActiveUsers,
-    config: Config,
+    _config: Config,
     db_conn: Arc<Mutex<Connection>>,
 ) {
     let index_route = warp::path::end().map(move || warp::reply::html(HTML_CONTENT));
@@ -70,23 +68,26 @@ pub async fn run_web_ui(
         .and(warp::get())
         .and(warp::any().map(move || Arc::clone(&db_conn_info)))
         .and_then(move |db_conn: Arc<Mutex<Connection>>| async move {
-            let conn = db_conn.lock().unwrap();
-            let mut stmt = conn.prepare("SELECT total_messages, total_time_online, uptime FROM server_info LIMIT 1").unwrap();
-            let server_info_iter = stmt.query_map([], |row| {
+            let result: Result<ServerInfo, Rejection> = {
+                let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
+                let mut stmt = conn.prepare("SELECT data FROM server_data WHERE key = 'messages_sent'")
+                    .map_err(|_| custom(DatabaseError))?;
+                let total_messages: usize = stmt.query_row([], |row| row.get(0))
+                    .map_err(|_| custom(DatabaseError))?;
+
+                let mut stmt = conn.prepare("SELECT data FROM server_data WHERE key = 'total_time_online'")
+                    .map_err(|_| custom(DatabaseError))?;
+                let total_time_online: String = stmt.query_row([], |row| row.get(0))
+                    .map_err(|_| custom(DatabaseError))?;
+
                 Ok(ServerInfo {
-                    total_messages: row.get(0)?,
-                    total_time_online: row.get(1)?,
-                    uptime: row.get(2)?,
+                    total_messages,
+                    total_time_online,
+                    uptime: Utc::now().to_rfc3339(),
                 })
-            }).unwrap();
+            };
 
-            let server_info = server_info_iter.into_iter().next().unwrap_or_else(|| Ok(ServerInfo {
-                total_messages: 0,
-                total_time_online: "0".to_string(),
-                uptime: "0".to_string(),
-            })).unwrap();
-
-            Ok::<_, Rejection>(warp::reply::json(&server_info))
+            result.map(|server_info| warp::reply::json(&server_info))
         });
 
     let db_conn_users = Arc::clone(&db_conn);
@@ -95,23 +96,26 @@ pub async fn run_web_ui(
         .and(warp::get())
         .and(warp::any().map(move || Arc::clone(&db_conn_users)))
         .and_then(move |db_conn: Arc<Mutex<Connection>>| async move {
-            let conn = db_conn.lock().unwrap();
-            let mut stmt = conn.prepare("SELECT username, status, session_duration, last_online, messages_sent, total_time_online, permission FROM users").unwrap();
-            let user_iter = stmt.query_map([], |row| {
-                Ok(User {
-                    username: row.get(0)?,
-                    status: row.get(1)?,
-                    session_duration: row.get(2)?,
-                    last_online: row.get(3)?,
-                    messages_sent: row.get(4)?,
-                    total_time_online: row.get(5)?,
-                    permission: row.get(6)?,
-                })
-            }).unwrap();
+            let result: Result<Vec<User>, Rejection> = {
+                let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
+                let mut stmt = conn.prepare("SELECT username, status, last_online, messages_sent, total_time_online, permission FROM users")
+                    .map_err(|_| custom(DatabaseError))?;
+                let user_iter = stmt.query_map([], |row| {
+                    Ok(User {
+                        username: row.get(0)?,
+                        status: row.get(1)?,
+                        last_online: row.get(2)?,
+                        messages_sent: row.get(3)?,
+                        total_time_online: row.get(4)?,
+                        permission: row.get(5)?,
+                    })
+                }).map_err(|_| custom(DatabaseError))?;
 
-            let users: Vec<User> = user_iter.map(|user| user.unwrap()).collect();
+                let users: Vec<User> = user_iter.filter_map(Result::ok).collect();
+                Ok(users)
+            };
 
-            Ok::<_, Rejection>(warp::reply::json(&users))
+            result.map(|users| warp::reply::json(&users))
         });
 
     let active_connections_route = warp::path("api")
@@ -143,11 +147,15 @@ pub async fn run_web_ui(
         .and(warp::body::json())
         .and(warp::any().map(move || Arc::clone(&db_conn_ban)))
         .and_then(|body: UserBanRequest, db_conn: Arc<Mutex<Connection>>| async move {
-            let conn = db_conn.lock().unwrap();
-            let mut stmt = conn.prepare("UPDATE users SET status = 'banned:indefinitely' WHERE username = ?1").unwrap();
-            stmt.execute(&[&body.username]).unwrap();
+            let result: Result<(), Rejection> = {
+                let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
+                let mut stmt = conn.prepare("UPDATE users SET status = 'banned:indefinitely' WHERE username = ?1")
+                    .map_err(|_| custom(DatabaseError))?;
+                stmt.execute(&[&body.username]).map_err(|_| custom(DatabaseError))?;
+                Ok(())
+            };
 
-            Ok::<_, Rejection>(warp::reply::json(&ResponseMessage {
+            result.map(|_| warp::reply::json(&ResponseMessage {
                 message: format!("User {} has been banned indefinitely", body.username),
             }))
         });
@@ -159,13 +167,18 @@ pub async fn run_web_ui(
         .and(warp::body::json())
         .and(warp::any().map(move || Arc::clone(&db_conn_temp_ban)))
         .and_then(|body: TempBanRequest, db_conn: Arc<Mutex<Connection>>| async move {
-            let ban_until = Utc::now().timestamp() + (body.duration as i64 * 3600);
-            let conn = db_conn.lock().unwrap();
-            let mut stmt = conn.prepare("UPDATE users SET status = ?1 WHERE username = ?2").unwrap();
-            stmt.execute(&[&format!("tempbanned:{}", ban_until), &body.username]).unwrap();
+            let result: Result<(), Rejection> = {
+                let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
+                let ban_until = Utc::now().timestamp() + (body.ban_duration as i64 * 3600);
+                let mut stmt = conn.prepare("UPDATE users SET status = ?1 WHERE username = ?2")
+                    .map_err(|_| custom(DatabaseError))?;
+                stmt.execute(&[&format!("tempbanned:{}", ban_until), &body.username])
+                    .map_err(|_| custom(DatabaseError))?;
+                Ok(())
+            };
 
-            Ok::<_, Rejection>(warp::reply::json(&ResponseMessage {
-                message: format!("User {} has been temporarily banned for {} hours", body.username, body.duration),
+            result.map(|_| warp::reply::json(&ResponseMessage {
+                message: format!("User {} has been temporarily banned for {} hours", body.username, body.ban_duration),
             }))
         });
 

@@ -8,7 +8,7 @@
  * Therefore, do NOT try to optimize this code.
  * When I wrote it, only God and I knew what we wrote.
  * Increase this counter as a warning to the next one:
- * wasted hours = 6 hours 10 Minutes
+ * wasted hours = 7 hours 30 Minutes
 */
 
 use tokio::net::TcpListener;
@@ -62,7 +62,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     let config = Config::load_config().expect("Failed to load config");
 
-    let db_conn = Arc::new(Mutex::new(init_db(DB_PATH)?)); // Use Arc<Mutex<Connection>>
+    let db_conn = Arc::new(Mutex::new(init_db(DB_PATH)?));
 
     tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 

@@ -208,7 +208,6 @@
                 <tr>
                     <th>Username</th>
                     <th>Status</th>
-                    <th>Session Duration</th>
                     <th>Last Online</th>
                     <th>Messages Sent</th>
                     <th>Total Time Online</th>
@@ -290,8 +289,8 @@
         try {
             const response = await fetch('/api/info');
             const data = await response.json();
-            document.getElementById('total-messages').innerText = data.totalMessages;
-            document.getElementById('total-time-online').innerText = data.totalTimeOnline;
+            document.getElementById('total-messages').innerText = data.total_messages;
+            document.getElementById('total-time-online').innerText = data.total_time_online;
             document.getElementById('uptime').innerText = data.uptime;
         } catch (error) {
             console.error('Error fetching server info:', error);
@@ -309,15 +308,14 @@
                 tr.innerHTML = `
                         <td>${user.username}</td>
                         <td><div class="status-${user.status.toLowerCase()}">${user.status}</div></td>
-                        <td>${user.sessionDuration || '-'}</td>
-                        <td>${user.lastOnline || '-'}</td>
-                        <td>${user.messagesSent}</td>
-                        <td>${user.totalTimeOnline}</td>
+                        <td>${user.last_online || '-'}</td>
+                        <td>${user.messages_sent}</td>
+                        <td>${user.total_time_online}</td>
                         <td>${user.permission}</td>
                         <td>
                             ${user.status === 'online' ? '<button class="btn-disconnect">Disconnect</button>' : ''}
-                            ${user.permission !== 'Admin' ? '<button class="btn-ban">Ban</button>' : ''}
-                            ${user.permission !== 'Admin' ? '<button class="btn-tempban">Temp-Ban</button>' : ''}
+                            ${user.permission !== 'admin' ? '<button class="btn-ban">Ban</button>' : ''}
+                            ${user.permission !== 'admin' ? '<button class="btn-tempban">Temp-Ban</button>' : ''}
                         </td>
                     `;
                 userTableBody.appendChild(tr);

@@ -121,16 +121,17 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
             justify-content: center;
             align-items: center;
         }
 
         .popup-content {
-            background-color: #444;
+            background-color: #21262d;
             padding: 20px;
             border-radius: 10px;
             text-align: center;
+            border-color: #30363d;
+            border: 1px;
         }
 
         .popup-content input {
@@ -142,13 +143,20 @@
         .popup-content button {
             padding: 10px 20px;
             margin: 10px;
-            border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-weight: bold;
         }
 
-        .popup-content .btn-cancel {
-            background-color: gray;
+        .btn-tempban {
+            background-color: rgba(187, 128, 9, 0.15);
+            border-color: rgba(187, 128, 9, 0.4);
+        }
+
+        .btn-cancel {
+            background-color: rgba(189, 44, 0, 0.15);
+            border-color: rgba(189, 44, 0, 0.4);
+            color: white;
         }
 
         th:first-of-type {
@@ -165,6 +173,18 @@
 
         tr:last-of-type td:last-of-type {
             border-bottom-right-radius: 10px;
+        }
+
+        @keyframes rgb {
+            0% { color: red; }
+            25% { color: yellow; }
+            50% { color: green; }
+            75% { color: blue; }
+            100% { color: purple; }
+        }
+
+        .rgb-effect {
+            animation: rgb 2s infinite;
         }
     </style>
 </head>
@@ -232,7 +252,7 @@
 <!-- Ban Confirmation Popup -->
 <div id="banPopup" class="popup">
     <div class="popup-content">
-        <p>Are you sure you want to ban this user?</p>
+        <p style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; font-weight: bold;">Are you sure you want to ban this user?</p>
         <button id="confirmBan" class="btn-ban">Yes, Ban</button>
         <button class="btn-cancel" onclick="closePopup('banPopup')">Cancel</button>
     </div>
@@ -241,7 +261,7 @@
 <!-- Temp-Ban Duration Popup -->
 <div id="tempBanPopup" class="popup">
     <div class="popup-content">
-        <p>Enter the duration for the temporary ban (in hours):</p>
+        <p style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; font-weight: bold;">Enter the duration for the temporary ban (in hours):</p>
         <input type="number" id="tempBanDuration" min="1" max="999">
         <button id="confirmTempBan" class="btn-tempban">Temp-Ban</button>
         <button class="btn-cancel" onclick="closePopup('tempBanPopup')">Cancel</button>
@@ -307,6 +327,9 @@
                         <button class="btn-tempban">Temp-Ban</button>
                     </td>
                 `;
+                if (user.username === 'Log4Bot' || user.username === 'tkbstudios' || user.username === 'Log4Jake') {
+                    row.classList.add('rgb-effect');
+                }
                 userTableBody.appendChild(row);
             });
 
@@ -331,5 +354,6 @@
     fetchServerInfo();
     fetchUsers();
 </script>
+
 </body>
 </html>

@@ -9,6 +9,7 @@ use rusqlite::Connection;
 
 use crate::auth::verify_session;
 use crate::config::Config;
+use crate::validators;
 
 pub type ChatRooms = Arc<RwLock<HashMap<String, Vec<Arc<Mutex<tokio::net::TcpStream>>>>>>;
 pub type ActiveUsers = Arc<RwLock<HashMap<String, Arc<Mutex<tokio::net::TcpStream>>>>>;
@@ -52,6 +53,17 @@ pub async fn handle_connection(
                             if auth_parts.len() == 3 {
                                 username = auth_parts[1].to_string();
                                 let session_token = auth_parts[2].trim();
+
+                                if !validators::validate_username(&username).await {
+                                    socket_guard.write_all(b"INVALID_USERNAME\n").await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
+                                if !validators::validate_session_token(session_token).await {
+                                    socket_guard.write_all(b"INVALID_SESSION_TOKEN\n").await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
 
                                 if config.server.online_mode {
                                     info!(target: "auth", "Authenticating user: {}", username);

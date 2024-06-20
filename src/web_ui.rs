@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use crate::conn_handler::ActiveUsers;
 use crate::config::Config;
 use chrono::Utc;
+use crate::validators;
 
 const HTML_CONTENT: &str = include_str!("../web/index.html");
 
@@ -50,7 +51,12 @@ struct TempBanRequest {
 
 #[derive(Debug)]
 struct DatabaseError;
+
+#[derive(Debug)]
+struct ValidationError;
+
 impl warp::reject::Reject for DatabaseError {}
+impl warp::reject::Reject for ValidationError {}
 
 pub async fn run_web_ui(
     host: String,
@@ -148,10 +154,14 @@ pub async fn run_web_ui(
         .and(warp::any().map(move || Arc::clone(&db_conn_ban)))
         .and_then(|body: UserBanRequest, db_conn: Arc<Mutex<Connection>>| async move {
             let result: Result<(), Rejection> = {
+                let username = &body.username;
+                if !validators::validate_username(&username).await {
+                    return Err(custom(ValidationError));
+                }
                 let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
                 let mut stmt = conn.prepare("UPDATE users SET status = 'banned:indefinitely' WHERE username = ?1")
                     .map_err(|_| custom(DatabaseError))?;
-                stmt.execute(&[&body.username]).map_err(|_| custom(DatabaseError))?;
+                stmt.execute(&[username]).map_err(|_| custom(DatabaseError))?;
                 Ok(())
             };
 
@@ -168,11 +178,15 @@ pub async fn run_web_ui(
         .and(warp::any().map(move || Arc::clone(&db_conn_temp_ban)))
         .and_then(|body: TempBanRequest, db_conn: Arc<Mutex<Connection>>| async move {
             let result: Result<(), Rejection> = {
+                let username = &body.username;
+                if !validators::validate_username(&username).await {
+                    return Err(custom(ValidationError));
+                }
                 let conn = db_conn.lock().map_err(|_| custom(DatabaseError))?;
                 let ban_until = Utc::now().timestamp() + (body.ban_duration as i64 * 3600);
                 let mut stmt = conn.prepare("UPDATE users SET status = ?1 WHERE username = ?2")
                     .map_err(|_| custom(DatabaseError))?;
-                stmt.execute(&[&format!("tempbanned:{}", ban_until), &body.username])
+                stmt.execute(&[&format!("tempbanned:{}", ban_until), username])
                     .map_err(|_| custom(DatabaseError))?;
                 Ok(())
             };

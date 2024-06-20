@@ -29,6 +29,7 @@ mod auth;
 mod conn_handler;
 mod web_ui;
 mod db;
+mod validators;
 
 use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};

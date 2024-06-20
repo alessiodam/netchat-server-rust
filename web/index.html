@@ -249,18 +249,6 @@
 </div>
 
 <script>
-    document.querySelectorAll('.btn-ban').forEach(button => {
-        button.addEventListener('click', () => {
-            document.getElementById('banPopup').style.display = 'flex';
-        });
-    });
-
-    document.querySelectorAll('.btn-tempban').forEach(button => {
-        button.addEventListener('click', () => {
-            document.getElementById('tempBanPopup').style.display = 'flex';
-        });
-    });
-
     document.getElementById('confirmBan').addEventListener('click', () => {
         // Implement ban logic here
         closePopup('banPopup');
@@ -302,24 +290,39 @@
             const response = await fetch('/api/users');
             const users = await response.json();
             const userTableBody = document.getElementById('user-table-body');
-            userTableBody.innerHTML = '';
+            userTableBody.innerHTML = ''; // Clear the table body
+
             users.forEach(user => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                        <td>${user.username}</td>
-                        <td><div class="status-${user.status.toLowerCase()}">${user.status}</div></td>
-                        <td>${user.last_online || '-'}</td>
-                        <td>${user.messages_sent}</td>
-                        <td>${user.total_time_online}</td>
-                        <td>${user.permission}</td>
-                        <td>
-                            ${user.status === 'online' ? '<button class="btn-disconnect">Disconnect</button>' : ''}
-                            ${user.permission !== 'admin' ? '<button class="btn-ban">Ban</button>' : ''}
-                            ${user.permission !== 'admin' ? '<button class="btn-tempban">Temp-Ban</button>' : ''}
-                        </td>
-                    `;
-                userTableBody.appendChild(tr);
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.username}</td>
+                    <td><span class="status-${user.status.toLowerCase()}">${user.status}</span></td>
+                    <td>${user.last_online}</td>
+                    <td>${user.messages_sent}</td>
+                    <td>${user.total_time_online}</td>
+                    <td>${user.permission}</td>
+                    <td>
+                        <button class="btn-disconnect">Disconnect</button>
+                        <button class="btn-ban">Ban</button>
+                        <button class="btn-tempban">Temp-Ban</button>
+                    </td>
+                `;
+                userTableBody.appendChild(row);
             });
+
+            // Attach event listeners to the dynamically created buttons
+            document.querySelectorAll('.btn-ban').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.getElementById('banPopup').style.display = 'flex';
+                });
+            });
+
+            document.querySelectorAll('.btn-tempban').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.getElementById('tempBanPopup').style.display = 'flex';
+                });
+            });
+
         } catch (error) {
             console.error('Error fetching users:', error);
         }
@@ -327,8 +330,6 @@
 
     fetchServerInfo();
     fetchUsers();
-
-    showPage('info');
 </script>
 </body>
 </html>

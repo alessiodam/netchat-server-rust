@@ -48,6 +48,7 @@ async fn index_handler() -> Html<&'static str> {
 }
 
 async fn info_handler() -> Result<Json<ServerInfo>, DatabaseError> {
+    // TODO: make this work since it always returns 0, it failed somehow, somewhere
     let conn = get_db_conn().map_err(|_| DatabaseError)?;
 
     let total_messages = {

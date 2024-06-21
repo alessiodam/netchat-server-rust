@@ -57,7 +57,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
     init_db().expect("Failed to initialize database");
 
-    tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
+    tracing::info!(target: "tcpserver", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
     let listener = TcpListener::bind(format!("{}:{}", config.server.host, config.server.port)).await?;
     let active_connections = state::get_active_connections();
@@ -79,7 +79,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     loop {
         tokio::select! {
             Ok((socket, _)) = listener.accept() => {
-                tracing::info!(target: "server", "New connection accepted");
+                tracing::info!(target: "tcpserver", "New connection accepted");
 
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
                 let commands_clone = get_commands();

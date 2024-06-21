@@ -1,5 +1,5 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use std::sync::Arc;
 use tracing::{info, warn, error};
@@ -9,7 +9,7 @@ use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
 use crate::commands::{Command};
-use crate::db::{add_or_update_user, increment_user_sent_messages, set_user_status, update_user_time_online};
+use crate::db::{add_message_to_db, add_or_update_user, increment_user_sent_messages, set_user_status, update_user_time_online};
 use crate::state::{get_active_connections, get_active_users};
 
 pub async fn handle_connection(
@@ -127,11 +127,12 @@ pub async fn handle_connection(
                             let timestamp = Utc::now().timestamp();
                             let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, command_message);
                             if recipient == "global" {
-                                broadcast_message(&get_active_connections(), &full_message).await;
+                                broadcast_message(&full_message).await;
                             } else {
                                 send_direct_message(recipient, &full_message).await;
                             }
                             let _ = increment_user_sent_messages(&username);
+                            let _ = add_message_to_db(timestamp, &username, recipient, &command_message);
                         } else {
                             socket_guard.write_all(b"INVALID_MESSAGE_FORMAT\n").await.unwrap();
                             socket_guard.flush().await.unwrap();
@@ -189,13 +190,12 @@ pub async fn handle_connection(
     let _ = update_user_time_online(&username, Utc::now().timestamp() - start_time);
 }
 
-async fn broadcast_message(
-    active_connections: &Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
-    message: &str,
-) {
+async fn broadcast_message(message: &str) {
+    // TODO: only send to logged in users
     info!(target: "server", "Broadcasting message: {}", message);
 
-    let connections = active_connections.read().await;
+    let connections = get_active_connections();
+    let connections = connections.read().await;
     for client in connections.iter() {
         let client = client.clone();
         let message = message.to_string();

@@ -118,7 +118,7 @@ pub async fn run_web_ui(
 
     let addr = SocketAddr::from(([0, 0, 0, 0], config.web.port));
 
-    tracing::info!(target: "server", "Starting web server on {}:{}", config.web.host, config.web.port);
+    tracing::info!(target: "webserver", "Starting web server on {}:{}", config.web.host, config.web.port);
     Server::bind(addr)
         .serve(app.into_make_service())
         .await

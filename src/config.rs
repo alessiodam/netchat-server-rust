@@ -37,3 +37,7 @@ impl Config {
         toml::from_str(&contents).map_err(|e| format!("Error deserializing config: {}", e).into())
     }
 }
+
+pub fn get_config() -> Result<Config, Box<dyn Error>> {
+    Config::load_config()
+}

@@ -1,23 +1,10 @@
-/*
- * NETCHAT Server, in Rust.
- *
- * Dear Rust developers/community
- * Please don't get mad at me if the code is bd
- * This is only my second project with Rust :(
- *
- * Therefore, do NOT try to optimize this code.
- * When I wrote it, only God and I knew what we wrote.
- * Increase this counter as a warning to the next one:
- * wasted hours = 7 hours 30 Minutes
-*/
-
+// src/main.rs
 use tokio::net::TcpListener;
 use std::error::Error;
 use tracing_subscriber::fmt;
 use tokio::sync::RwLock;
 use std::sync::Arc;
 use tokio::signal;
-use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 use std::fs;
@@ -31,11 +18,13 @@ mod web_ui;
 mod db;
 mod validators;
 mod commands;
+mod state;
 
 use config::Config;
-use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
+use conn_handler::{handle_connection};
 use db::init_db;
 use crate::commands::get_commands;
+use crate::state::get_active_users;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
 const CONFIG_PATH: &str = "config.toml";
@@ -70,9 +59,8 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
     let listener = TcpListener::bind(format!("{}:{}", config.server.host, config.server.port)).await?;
-    let active_connections = Arc::new(RwLock::new(Vec::new()));
-    let chat_rooms: ChatRooms = Arc::new(RwLock::new(HashMap::new()));
-    let active_users: ActiveUsers = Arc::new(RwLock::new(HashMap::new()));
+    let active_connections = state::get_active_connections();
+    let chat_rooms = state::get_chat_rooms();
 
     {
         let mut chat_rooms = chat_rooms.write().await;
@@ -83,15 +71,14 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
         let web_host = config.web.host.clone();
         let web_port = config.web.port;
         let active_connections = Arc::clone(&active_connections);
-        let active_users = Arc::clone(&active_users);
         let config_clone = config.clone();
         let db_conn_clone = Arc::clone(&db_conn);
         tokio::spawn(async move {
-            web_ui::run_web_ui(web_host, web_port, active_connections, active_users, config_clone, db_conn_clone).await;
+            web_ui::run_web_ui(web_host, web_port, active_connections, config_clone, db_conn_clone).await;
         });
     }
 
-    tokio::spawn(remove_non_authenticated_connections(active_connections.clone(), active_users.clone()));
+    tokio::spawn(remove_non_authenticated_connections(active_connections.clone()));
 
     loop {
         tokio::select! {
@@ -99,7 +86,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 tracing::info!(target: "server", "New connection accepted");
 
                 let active_connections = active_connections.clone();
-                let active_users = active_users.clone();
                 let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
                 let db_conn = Arc::new(tokio::sync::Mutex::new(init_db(DB_PATH)?));
@@ -113,7 +99,6 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 tokio::spawn(handle_connection(
                     socket,
                     active_connections,
-                    active_users,
                     config_clone,
                     db_conn,
                     commands_clone
@@ -145,14 +130,14 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 
 async fn remove_non_authenticated_connections(
     active_connections: Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>,
-    active_users: ActiveUsers,
 ) {
     loop {
         sleep(Duration::from_secs(60)).await;
         let mut connections_to_remove = Vec::new();
+        let active_users = get_active_users();
         {
-            let active_users = active_users.read().await;
             let active_connections = active_connections.read().await;
+            let active_users = active_users.read().await;
             for (index, conn) in active_connections.iter().enumerate() {
                 if !active_users.values().any(|user_conn| Arc::ptr_eq(user_conn, conn)) {
                     connections_to_remove.push(index);

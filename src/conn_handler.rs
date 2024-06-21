@@ -10,14 +10,11 @@ use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
 use crate::commands::{Command};
-
-pub type ChatRooms = Arc<RwLock<HashMap<String, Vec<Arc<Mutex<tokio::net::TcpStream>>>>>>;
-pub type ActiveUsers = Arc<RwLock<HashMap<String, Arc<Mutex<tokio::net::TcpStream>>>>>;
+use crate::state::get_active_users;
 
 pub async fn handle_connection(
     socket: Arc<Mutex<tokio::net::TcpStream>>,
     active_connections: Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
-    active_users: ActiveUsers,
     config: Config,
     db_conn: Arc<Mutex<Connection>>,
     commands: HashMap<&str, Box<dyn Command>>,
@@ -78,6 +75,7 @@ pub async fn handle_connection(
                                                 authenticated = true;
                                                 add_or_update_user(&db_conn, &username).await;
                                                 {
+                                                    let active_users = get_active_users();
                                                     let mut users = active_users.write().await;
                                                     users.insert(username.clone(), Arc::clone(&socket));
                                                 }
@@ -96,6 +94,7 @@ pub async fn handle_connection(
                                     authenticated = true;
                                     add_or_update_user(&db_conn, &username).await;
                                     {
+                                        let active_users = get_active_users();
                                         let mut users = active_users.write().await;
                                         users.insert(username.clone(), Arc::clone(&socket));
                                     }
@@ -120,7 +119,7 @@ pub async fn handle_connection(
                                 let command_name = command_message.split_whitespace().next().unwrap();
                                 let args: Vec<&str> = command_message.split_whitespace().skip(1).collect();
                                 if let Some(command) = commands.get(command_name) {
-                                    let response = command.execute(&args);
+                                    let response = command.execute(&args).await;
                                     socket_guard.write_all(&response).await.unwrap();
                                     socket_guard.flush().await.unwrap();
                                     continue;
@@ -132,7 +131,7 @@ pub async fn handle_connection(
                             if recipient == "global" {
                                 broadcast_message(&active_connections, &full_message).await;
                             } else {
-                                send_direct_message(&active_users, recipient, &full_message).await;
+                                send_direct_message(recipient, &full_message).await;
                             }
                             let _ = increment_user_sent_messages(&db_conn, &username).await;
                         } else {
@@ -182,6 +181,7 @@ pub async fn handle_connection(
         }
     }
     {
+        let active_users = get_active_users();
         let mut users = active_users.write().await;
         users.remove(&username);
     }
@@ -213,7 +213,8 @@ async fn broadcast_message(
     }
 }
 
-async fn send_direct_message(active_users: &ActiveUsers, target: &str, message: &str) {
+async fn send_direct_message(target: &str, message: &str) {
+    let active_users = get_active_users();
     let active_users = active_users.read().await;
     if let Some(client) = active_users.get(target) {
         let client = client.clone();

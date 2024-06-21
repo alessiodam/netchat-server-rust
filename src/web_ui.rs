@@ -5,14 +5,12 @@ use axum::{
     routing::get,
     Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use tokio::sync::RwLock;
 use rusqlite::Connection;
-use chrono::Utc;
-use crate::conn_handler::ActiveUsers;
+use crate::state::get_active_users;
 use crate::config::Config;
-use crate::validators;
 use std::net::SocketAddr;
 use axum_server::Server;
 
@@ -40,16 +38,8 @@ struct ActiveConnectionCount {
     count: usize,
 }
 
-#[derive(Serialize)]
-struct ResponseMessage {
-    message: String,
-}
-
 #[derive(Debug)]
 struct DatabaseError;
-
-#[derive(Debug)]
-struct ValidationError;
 
 impl IntoResponse for DatabaseError {
     fn into_response(self) -> axum::response::Response {
@@ -57,20 +47,13 @@ impl IntoResponse for DatabaseError {
     }
 }
 
-impl IntoResponse for ValidationError {
-    fn into_response(self) -> axum::response::Response {
-        (StatusCode::BAD_REQUEST, "Validation error").into_response()
-    }
-}
-
 async fn index_handler() -> Html<&'static str> {
     Html(HTML_CONTENT)
 }
 
-async fn info_handler(Extension(db_conn): Extension<Arc<Mutex<Connection>>>) -> Result<Json<ServerInfo>, DatabaseError> {
-    let conn = db_conn.lock().map_err(|_| DatabaseError)?;
-
+async fn info_handler(Extension(_db_conn): Extension<Arc<Mutex<Connection>>>) -> Result<Json<ServerInfo>, DatabaseError> {
     // TODO: make this work
+    // let conn = db_conn.lock().map_err(|_| DatabaseError)?;
     // let mut stmt = conn.prepare("SELECT data FROM server_data WHERE key = 'messages_sent'")
     //     .map_err(|_| DatabaseError)?;
     // let total_messages: usize = stmt.query_row([], |row| row.get(0))
@@ -112,12 +95,13 @@ async fn users_handler(Extension(db_conn): Extension<Arc<Mutex<Connection>>>) ->
 }
 
 async fn active_connections_handler(Extension(active_connections): Extension<Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>>) -> Json<ActiveConnectionCount> {
-    let conns = active_connections.read().await;
-    let count = conns.len();
+    let connections = active_connections.read().await;
+    let count = connections.len();
     Json(ActiveConnectionCount { count })
 }
 
-async fn active_users_handler(Extension(active_users): Extension<ActiveUsers>) -> Json<Vec<String>> {
+async fn active_users_handler() -> Json<Vec<String>> {
+    let active_users = get_active_users();
     let users = active_users.read().await;
     let active_users_list: Vec<String> = users.keys().cloned().collect();
     Json(active_users_list)
@@ -127,7 +111,6 @@ pub async fn run_web_ui(
     host: String,
     port: u16,
     active_connections: Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>,
-    active_users: ActiveUsers,
     _config: Config,
     db_conn: Arc<Mutex<Connection>>,
 ) {
@@ -139,7 +122,7 @@ pub async fn run_web_ui(
         .route("/api/active-users", get(active_users_handler))
         .layer(Extension(db_conn))
         .layer(Extension(active_connections))
-        .layer(Extension(active_users));
+        .layer(Extension(get_active_users()));
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
 

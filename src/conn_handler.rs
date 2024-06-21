@@ -191,24 +191,28 @@ pub async fn handle_connection(
 }
 
 async fn broadcast_message(message: &str) {
-    // TODO: only send to logged in users
     info!(target: "server", "Broadcasting message: {}", message);
 
     let connections = get_active_connections();
     let connections = connections.read().await;
+    let active_users = get_active_users();
+    let active_users = active_users.read().await;
+
     for client in connections.iter() {
-        let client = client.clone();
-        let message = message.to_string();
-        info!(target: "server", "Sending to client: {:?}", client);
-        tokio::spawn(async move {
-            let mut client = client.lock().await;
-            if let Err(e) = client.write_all(message.as_bytes()).await {
-                error!(target: "server", "Failed to send message: {}", e);
-            } else {
-                let _ = client.flush().await;
-                info!(target: "server", "Broadcasted message: {}", message);
-            }
-        });
+        if active_users.values().any(|user| Arc::ptr_eq(user, client)) {
+            let client = client.clone();
+            let message = message.to_string();
+            info!(target: "server", "Sending to client: {:?}", client);
+            tokio::spawn(async move {
+                let mut client = client.lock().await;
+                if let Err(e) = client.write_all(message.as_bytes()).await {
+                    error!(target: "server", "Failed to send message: {}", e);
+                } else {
+                    let _ = client.flush().await;
+                    info!(target: "server", "Broadcasted message: {}", message);
+                }
+            });
+        }
     }
 }
 

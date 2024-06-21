@@ -5,18 +5,16 @@ use std::sync::Arc;
 use tracing::{info, warn, error};
 use std::collections::HashMap;
 use chrono::Utc;
-use rusqlite::Connection;
 use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
 use crate::commands::{Command};
-use crate::state::get_active_users;
+use crate::db::{add_or_update_user, increment_user_sent_messages, set_user_status, update_user_time_online};
+use crate::state::{get_active_connections, get_active_users};
 
 pub async fn handle_connection(
     socket: Arc<Mutex<tokio::net::TcpStream>>,
-    active_connections: Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
     config: Config,
-    db_conn: Arc<Mutex<Connection>>,
     commands: HashMap<&str, Box<dyn Command>>,
 ) {
     let mut buf = vec![0; 4 * 1024];
@@ -73,7 +71,7 @@ pub async fn handle_connection(
                                                 socket_guard.flush().await.unwrap();
                                             } else {
                                                 authenticated = true;
-                                                add_or_update_user(&db_conn, &username).await;
+                                                add_or_update_user(&username);
                                                 {
                                                     let active_users = get_active_users();
                                                     let mut users = active_users.write().await;
@@ -92,7 +90,7 @@ pub async fn handle_connection(
                                 } else {
                                     info!(target: "auth", "Server not in online mode, marking user: {} as authenticated", username);
                                     authenticated = true;
-                                    add_or_update_user(&db_conn, &username).await;
+                                    add_or_update_user(&username);
                                     {
                                         let active_users = get_active_users();
                                         let mut users = active_users.write().await;
@@ -129,11 +127,11 @@ pub async fn handle_connection(
                             let timestamp = Utc::now().timestamp();
                             let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, command_message);
                             if recipient == "global" {
-                                broadcast_message(&active_connections, &full_message).await;
+                                broadcast_message(&get_active_connections(), &full_message).await;
                             } else {
                                 send_direct_message(recipient, &full_message).await;
                             }
-                            let _ = increment_user_sent_messages(&db_conn, &username).await;
+                            let _ = increment_user_sent_messages(&username);
                         } else {
                             socket_guard.write_all(b"INVALID_MESSAGE_FORMAT\n").await.unwrap();
                             socket_guard.flush().await.unwrap();
@@ -175,6 +173,7 @@ pub async fn handle_connection(
     });
 
     {
+        let active_connections = get_active_connections();
         let mut conns = active_connections.write().await;
         if let Some(pos) = conns.iter().position(|x| Arc::ptr_eq(x, &socket)) {
             conns.remove(pos);
@@ -186,8 +185,8 @@ pub async fn handle_connection(
         users.remove(&username);
     }
 
-    set_user_status(&db_conn, &username, "offline").await;
-    let _ = update_user_time_online(&db_conn, &username, Utc::now().timestamp() - start_time).await;
+    let _ = set_user_status(&username, "offline");
+    let _ = update_user_time_online(&username, Utc::now().timestamp() - start_time);
 }
 
 async fn broadcast_message(
@@ -230,62 +229,4 @@ async fn send_direct_message(target: &str, message: &str) {
             }
         });
     }
-}
-
-async fn add_or_update_user(db_conn: &Arc<Mutex<Connection>>, username: &str) {
-    let conn = db_conn.lock().await;
-    let mut stmt = conn.prepare("SELECT username FROM users WHERE username = ?1").unwrap();
-    let user_exists = stmt.exists([username]).unwrap();
-
-    if !user_exists {
-        let mut stmt = conn.prepare("INSERT INTO users (username, status, last_online, messages_sent, total_time_online, permission) VALUES (?1, 'online', ?2, 0, 0, 'user')").unwrap();
-        stmt.execute([username.to_string(), Utc::now().timestamp_millis().to_string()]).unwrap();
-    } else {
-        let mut stmt = conn.prepare("UPDATE users SET status = 'online', last_online = ?1 WHERE username = ?2").unwrap();
-        stmt.execute([Utc::now().timestamp_millis().to_string(), username.to_string()]).unwrap();
-    }
-}
-
-async fn set_user_status(db_conn: &Arc<Mutex<Connection>>, username: &str, status: &str) {
-    let conn = db_conn.lock().await;
-    let mut stmt = conn.prepare("UPDATE users SET status = ?1 WHERE username = ?2").unwrap();
-    stmt.execute([status.to_string(), username.to_string()]).unwrap();
-}
-
-async fn increment_user_sent_messages(db_conn: &Arc<Mutex<Connection>>, username: &str) -> Result<(), rusqlite::Error> {
-    let conn = db_conn.lock().await;
-
-    {
-        let mut stmt = conn.prepare("UPDATE users SET messages_sent = messages_sent + 1 WHERE username = ?1")?;
-        stmt.execute([username.to_string()])?;
-    }
-
-    {
-        let mut stmt2 = conn.prepare("
-            INSERT INTO server_data (key, value)
-            VALUES ('messages_sent', '1')
-            ON CONFLICT(key) DO UPDATE SET value = value + 1
-        ")?;
-        stmt2.execute([])?;
-    }
-
-    Ok(())
-}
-
-async fn update_user_time_online(db_conn: &Arc<Mutex<Connection>>, username: &str, time_online: i64) -> Result<(), rusqlite::Error> {
-    let conn = db_conn.lock().await;
-    {
-        let mut stmt = conn.prepare("UPDATE users SET total_time_online = total_time_online + ?1 WHERE username = ?2")?;
-        stmt.execute([&time_online.to_string(), &username.to_string()])?;
-    }
-
-    {
-        let mut stmt2 = conn.prepare("
-            INSERT INTO server_data (key, value)
-            VALUES ('total_time_online', ?1)
-            ON CONFLICT(key) DO UPDATE SET value = value + ?1
-        ")?;
-        stmt2.execute([&time_online.to_string(), &time_online.to_string()])?;
-    }
-    Ok(())
 }

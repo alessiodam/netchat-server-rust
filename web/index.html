@@ -48,7 +48,7 @@
             background-color: #333;
             border-radius: 10px;
         }
-        
+
         .stats div {
             text-align: center;
             width: 100%;
@@ -57,7 +57,7 @@
         .user-table {
             font-weight: bold;
         }
-        
+
         table {
             width: 100%;
             border-spacing: inherit;
@@ -201,6 +201,7 @@
 <div class="main-content">
     <div id="info" class="page" style="display: block;">
         <h1>Quick Info</h1>
+        WIP page
         <div class="stats">
             <div>
                 <p>Total Messages</p>
@@ -218,10 +219,12 @@
     </div>
     <div id="config" class="page" style="display: none;">
         <h1>Configuration</h1>
+        WIP page
         <!-- Configuration content goes here -->
     </div>
     <div id="users" class="page" style="display: none;">
         <h1>User Management</h1>
+        WIP page
         <div class="user-table">
             <table>
                 <thead>
@@ -245,6 +248,7 @@
     </div>
     <div id="experiments" class="page" style="display: none;">
         <h1>Experiments</h1>
+        WIP page
         <!-- Experiments content goes here -->
     </div>
 </div>
@@ -287,10 +291,17 @@
     }
 
     function showPage(pageId) {
+        localStorage.setItem('activePage', pageId);
+
         document.querySelectorAll('.page').forEach(page => {
             page.style.display = 'none';
         });
         document.getElementById(pageId).style.display = 'block';
+    }
+
+    function loadActivePage() {
+        const activePage = localStorage.getItem('activePage') || 'info';
+        showPage(activePage);
     }
 
     async function fetchServerInfo() {
@@ -351,6 +362,8 @@
         }
     }
 
+    // Load the active tab on page load
+    window.onload = loadActivePage;
     fetchServerInfo();
     fetchUsers();
 </script>

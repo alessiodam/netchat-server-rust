@@ -1,15 +1,12 @@
-// src/main.rs
 use tokio::net::TcpListener;
 use std::error::Error;
 use tracing_subscriber::fmt;
-use tokio::sync::RwLock;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 use std::fs;
 use reqwest;
-use std::sync::Mutex;
 
 mod config;
 mod auth;
@@ -21,7 +18,7 @@ mod commands;
 mod state;
 
 use config::Config;
-use conn_handler::{handle_connection};
+use conn_handler::handle_connection;
 use db::init_db;
 use crate::commands::get_commands;
 use crate::state::get_active_users;
@@ -35,6 +32,9 @@ fn init_tracing() {
 }
 
 async fn fetch_and_save_config() -> Result<(), Box<dyn Error + Send + Sync>> {
+    if !DB_PATH.ends_with(".db") {
+        return Err("DB path must end with .db".into());
+    }
     let response = reqwest::get(CONFIG_URL).await?;
     let content = response.text().await?;
     fs::write(CONFIG_PATH, content)?;
@@ -53,8 +53,9 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     let config = Config::load_config().expect("Failed to load config");
+    let config_clone_for_web = config.clone();
 
-    let db_conn = Arc::new(Mutex::new(init_db(DB_PATH)?));
+    init_db().expect("Failed to initialize database");
 
     tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
@@ -68,27 +69,19 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     if config.web.enable {
-        let web_host = config.web.host.clone();
-        let web_port = config.web.port;
-        let active_connections = Arc::clone(&active_connections);
-        let config_clone = config.clone();
-        let db_conn_clone = Arc::clone(&db_conn);
         tokio::spawn(async move {
-            web_ui::run_web_ui(web_host, web_port, active_connections, config_clone, db_conn_clone).await;
+            web_ui::run_web_ui(config_clone_for_web).await;
         });
     }
 
-    tokio::spawn(remove_non_authenticated_connections(active_connections.clone()));
+    tokio::spawn(remove_non_authenticated_connections());
 
     loop {
         tokio::select! {
             Ok((socket, _)) = listener.accept() => {
                 tracing::info!(target: "server", "New connection accepted");
 
-                let active_connections = active_connections.clone();
-                let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
-                let db_conn = Arc::new(tokio::sync::Mutex::new(init_db(DB_PATH)?));
                 let commands_clone = get_commands();
 
                 {
@@ -96,11 +89,10 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                     conns.push(socket.clone());
                 }
 
+                let config_clone = config.clone();
                 tokio::spawn(handle_connection(
                     socket,
-                    active_connections,
                     config_clone,
-                    db_conn,
                     commands_clone
                 ));
             },
@@ -108,6 +100,7 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
             _ = signal::ctrl_c() => {
                 tracing::info!("Shutdown signal received, notifying all clients...");
 
+                let active_connections = state::get_active_connections();
                 let conns = active_connections.read().await;
                 for conn in conns.iter() {
                     let conn = conn.clone();
@@ -128,16 +121,15 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-async fn remove_non_authenticated_connections(
-    active_connections: Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>,
-) {
+async fn remove_non_authenticated_connections() {
     loop {
         sleep(Duration::from_secs(60)).await;
         let mut connections_to_remove = Vec::new();
         let active_users = get_active_users();
+        let active_connections = state::get_active_connections();
         {
-            let active_connections = active_connections.read().await;
             let active_users = active_users.read().await;
+            let active_connections = active_connections.read().await;
             for (index, conn) in active_connections.iter().enumerate() {
                 if !active_users.values().any(|user_conn| Arc::ptr_eq(user_conn, conn)) {
                     connections_to_remove.push(index);
@@ -145,6 +137,7 @@ async fn remove_non_authenticated_connections(
             }
         }
         for index in connections_to_remove.iter().rev() {
+            let active_connections = state::get_active_connections();
             let mut conns = active_connections.write().await;
             let conn = conns.remove(*index);
             {

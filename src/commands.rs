@@ -13,6 +13,7 @@ pub fn get_commands() -> HashMap<&'static str, Box<dyn Command>> {
     // put commands here
     commands.insert("!perf", Box::new(PerfCommand));
     commands.insert("!list", Box::new(ListCommand));
+    commands.insert("!ping", Box::new(PingCommand));
 
     commands
 }
@@ -49,6 +50,18 @@ impl Command for ListCommand {
                     response.push_str(&format!("{}, ", user));
                 }
             }
+            response.into_bytes()
+        })
+    }
+}
+
+#[derive(Clone)]
+pub struct PingCommand;
+impl Command for PingCommand {
+    fn execute<'a>(&'a self, _args: &'a [&'a str]) -> BoxFuture<'a, Vec<u8>> {
+        Box::pin(async move {
+            let mut response = String::new();
+            response.push_str("Pong!");
             response.into_bytes()
         })
     }

@@ -24,6 +24,9 @@ pub struct WebConfig {
     pub enable: bool,
     pub host: String,
     pub port: u16,
+    pub authentication: bool,
+    pub username: String,
+    pub password: String,
 }
 
 impl Config {

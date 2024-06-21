@@ -25,7 +25,7 @@ pub async fn handle_connection(
     let mut authenticated = false;
     let mut username = String::new();
     let mut server_password_correct = if config.server.protect_server { false } else { true };
-    let start_time = Utc::now().timestamp_millis();
+    let start_time = Utc::now().timestamp();
 
     loop {
         let mut socket_guard = socket.lock().await;
@@ -114,7 +114,7 @@ pub async fn handle_connection(
                             continue;
                         }
                         if let Some((recipient, message)) = message.split_once(':') {
-                            let timestamp = Utc::now().timestamp_millis();
+                            let timestamp = Utc::now().timestamp();
                             let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, message);
                             if recipient == "global" {
                                 broadcast_message(&active_connections, &full_message).await;
@@ -174,7 +174,7 @@ pub async fn handle_connection(
     }
 
     set_user_status(&db_conn, &username, "offline").await;
-    update_user_time_online(&db_conn, &username, Utc::now().timestamp_millis() - start_time).await;
+    let _ = update_user_time_online(&db_conn, &username, Utc::now().timestamp() - start_time).await;
 }
 
 async fn broadcast_message(
@@ -224,12 +224,11 @@ async fn add_or_update_user(db_conn: &Arc<Mutex<Connection>>, username: &str) {
     let user_exists = stmt.exists([username]).unwrap();
 
     if !user_exists {
-        let mut stmt = conn.prepare("INSERT INTO users (username, status, last_online, messages_sent, total_time_online, permission) VALUES (?1, 'online', 'never', 0, 0, 'user')").unwrap();
-        stmt.execute([username.to_string()]).unwrap();
+        let mut stmt = conn.prepare("INSERT INTO users (username, status, last_online, messages_sent, total_time_online, permission) VALUES (?1, 'online', ?2, 0, 0, 'user')").unwrap();
+        stmt.execute([username.to_string(), Utc::now().timestamp_millis().to_string()]).unwrap();
     } else {
-        let now = Utc::now().timestamp_millis().to_string();
         let mut stmt = conn.prepare("UPDATE users SET status = 'online', last_online = ?1 WHERE username = ?2").unwrap();
-        stmt.execute([now, username.to_string()]).unwrap();
+        stmt.execute([Utc::now().timestamp_millis().to_string(), username.to_string()]).unwrap();
     }
 }
 
@@ -259,8 +258,20 @@ async fn increment_user_sent_messages(db_conn: &Arc<Mutex<Connection>>, username
     Ok(())
 }
 
-async fn update_user_time_online(db_conn: &Arc<Mutex<Connection>>, username: &str, time_online: i64) {
+async fn update_user_time_online(db_conn: &Arc<Mutex<Connection>>, username: &str, time_online: i64) -> Result<(), rusqlite::Error> {
     let conn = db_conn.lock().await;
-    let mut stmt = conn.prepare("UPDATE users SET total_time_online = total_time_online + ?1 WHERE username = ?2").unwrap();
-    stmt.execute([&time_online.to_string(), &username.to_string()]).unwrap();
+    {
+        let mut stmt = conn.prepare("UPDATE users SET total_time_online = total_time_online + ?1 WHERE username = ?2")?;
+        stmt.execute([&time_online.to_string(), &username.to_string()])?;
+    }
+
+    {
+        let mut stmt2 = conn.prepare("
+            INSERT INTO server_data (key, value)
+            VALUES ('total_time_online', ?1)
+            ON CONFLICT(key) DO UPDATE SET value = value + ?1
+        ")?;
+        stmt2.execute([&time_online.to_string(), &time_online.to_string()])?;
+    }
+    Ok(())
 }

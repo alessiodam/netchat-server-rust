@@ -6,7 +6,18 @@ api_key = "change me to use online-mode" # App API Key from TINET (Enable under 
 protect_server = false # protect your server with a password
 server_password = "12345678" # password for the server (requires protect_server to be true)
 
+
+# PLEASE DO NOT EXPOSE THE WEB UI ON ALL INTERFACES,
+# IT MIGHT BE UNSAFE FOR YOUR NETWORK, AS IT MIGHT
+# CREATE AN ENTRYPOINT FOR VULNERABILITIES.
 [web]
 enable = false # enable the web ui
 host = "127.0.0.1" # on what interface to run the web ui on
-port = 8000 # on what port to run the web ui on
+port = 2053 # on what port to run the web ui on
+
+authentication = false # enable authentication on the web UI
+username = "admin" # username for the web ui
+# password for the web ui
+# please set it even if authentication is set to false
+# it is used for administrative tasks, for example: disconnecting/banning users
+password = "admin"

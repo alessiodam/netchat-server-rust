@@ -6,10 +6,10 @@ use tracing::{info, warn, error};
 use std::collections::HashMap;
 use chrono::Utc;
 use rusqlite::Connection;
-
 use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
+use crate::commands::{Command};
 
 pub type ChatRooms = Arc<RwLock<HashMap<String, Vec<Arc<Mutex<tokio::net::TcpStream>>>>>>;
 pub type ActiveUsers = Arc<RwLock<HashMap<String, Arc<Mutex<tokio::net::TcpStream>>>>>;
@@ -20,6 +20,7 @@ pub async fn handle_connection(
     active_users: ActiveUsers,
     config: Config,
     db_conn: Arc<Mutex<Connection>>,
+    commands: HashMap<&str, Box<dyn Command>>,
 ) {
     let mut buf = vec![0; 4 * 1024];
     let mut authenticated = false;
@@ -113,9 +114,21 @@ pub async fn handle_connection(
                             socket_guard.flush().await.unwrap();
                             continue;
                         }
-                        if let Some((recipient, message)) = message.split_once(':') {
+
+                        if let Some((recipient, command_message)) = message.split_once(':') {
+                            if command_message.starts_with('!') {
+                                let command_name = command_message.split_whitespace().next().unwrap();
+                                let args: Vec<&str> = command_message.split_whitespace().skip(1).collect();
+                                if let Some(command) = commands.get(command_name) {
+                                    let response = command.execute(&args);
+                                    socket_guard.write_all(&response).await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
+                            }
+
                             let timestamp = Utc::now().timestamp();
-                            let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, message);
+                            let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, command_message);
                             if recipient == "global" {
                                 broadcast_message(&active_connections, &full_message).await;
                             } else {

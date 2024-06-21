@@ -30,10 +30,12 @@ mod conn_handler;
 mod web_ui;
 mod db;
 mod validators;
+mod commands;
 
 use config::Config;
 use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
 use db::init_db;
+use crate::commands::get_commands;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
 const CONFIG_PATH: &str = "config.toml";
@@ -101,13 +103,21 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
                 let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
                 let db_conn = Arc::new(tokio::sync::Mutex::new(init_db(DB_PATH)?));
+                let commands_clone = get_commands();
 
                 {
                     let mut conns = active_connections.write().await;
                     conns.push(socket.clone());
                 }
 
-                tokio::spawn(handle_connection(socket, active_connections, active_users, config_clone, db_conn));
+                tokio::spawn(handle_connection(
+                    socket,
+                    active_connections,
+                    active_users,
+                    config_clone,
+                    db_conn,
+                    commands_clone
+                ));
             },
 
             _ = signal::ctrl_c() => {

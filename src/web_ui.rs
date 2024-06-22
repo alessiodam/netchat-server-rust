@@ -127,3 +127,32 @@ pub async fn run_web_ui(
         .await
         .unwrap();
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_get_value_from_db() {
+        let conn = get_db_conn().unwrap();
+        conn.execute("INSERT INTO server_data (key, value) VALUES ('messages_sent', '0')", []).unwrap();
+        let result = get_value_from_db::<i32>(&conn, "messages_sent").unwrap();
+        println!("Result: {}", result);
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn test_get_value_from_db_error() {
+        let conn = get_db_conn().unwrap();
+        let result = get_value_from_db::<i32>(&conn, "invalid_key");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_get_value_from_db_default() {
+        let conn = get_db_conn().unwrap();
+        let result = get_value_from_db::<i32>(&conn, "invalid_key").unwrap_or_default();
+        assert_eq!(result, 0);
+    }
+}

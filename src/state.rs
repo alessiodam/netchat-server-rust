@@ -26,3 +26,24 @@ pub fn get_chat_rooms() -> ChatRooms {
 pub fn get_active_users() -> ActiveUsers {
     Arc::clone(&ACTIVE_USERS)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::runtime::Runtime;
+
+    #[test]
+    fn test_state() {
+        let rt = Runtime::new().unwrap();
+
+        rt.block_on(async {
+            let active_connections = get_active_connections();
+            let active_users = get_active_users();
+            let chat_rooms = get_chat_rooms();
+
+            assert_eq!(active_connections.read().await.len(), 0);
+            assert_eq!(active_users.read().await.len(), 0);
+            assert_eq!(chat_rooms.read().await.len(), 0);
+        });
+    }
+}

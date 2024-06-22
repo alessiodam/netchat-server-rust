@@ -16,6 +16,7 @@ mod db;
 mod validators;
 mod commands;
 mod state;
+mod textutils;
 
 use config::Config;
 use conn_handler::handle_connection;
@@ -25,7 +26,11 @@ use crate::state::get_active_users;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
 const CONFIG_PATH: &str = "config.toml";
-const DB_PATH: &str = "netchat.db";
+const DB_PATH: &str = if cfg!(test) {
+    "netchat-test.db"
+} else {
+    "netchat.db"
+};
 
 fn init_tracing() {
     fmt::init();

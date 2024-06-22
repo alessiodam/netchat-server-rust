@@ -2,4 +2,4 @@
 /.idea
 /.env
 /config.toml
-/netchat.db
+/*.db

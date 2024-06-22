@@ -9,7 +9,9 @@ use serde::Serialize;
 use crate::state::{get_active_connections, get_active_users};
 use crate::config::Config;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use axum_server::Server;
+use rusqlite::Connection;
 use crate::db::get_db_conn;
 
 #[derive(Serialize)]
@@ -43,29 +45,29 @@ impl IntoResponse for DatabaseError {
     }
 }
 
+fn get_value_from_db<T: FromStr>(conn: &Connection, key: &str) -> Result<T, DatabaseError> {
+    let mut stmt = conn.prepare("SELECT value FROM server_data WHERE key = ?1").unwrap();
+    let result: Result<String, rusqlite::Error> = stmt.query_row([key], |row| row.get(0));
+
+    match result {
+        Ok(value) => {
+            value.parse::<T>().map_err(|_| DatabaseError)
+        },
+        Err(_) => Err(DatabaseError),
+    }
+}
+
+// handlers
 async fn index_handler() -> Html<&'static str> {
     Html(include_str!("../web/index.html"))
 }
 
 async fn info_handler() -> Result<Json<ServerInfo>, DatabaseError> {
-    // TODO: make this work since it always returns 0, it failed somehow, somewhere
     let conn = get_db_conn().map_err(|_| DatabaseError)?;
 
-    let total_messages = {
-        let mut stmt = conn.prepare("SELECT value FROM server_data WHERE key = 'messages_sent'")
-            .map_err(|_| DatabaseError)?;
-        stmt.query_row([], |row| row.get(0))
-            .unwrap_or(0)
-    };
-
-    let total_time_online = {
-        let mut stmt = conn.prepare("SELECT value FROM server_data WHERE key = 'total_time_online'")
-            .map_err(|_| DatabaseError)?;
-        stmt.query_row([], |row| row.get(0))
-            .unwrap_or(0)
-    };
-
-    let uptime = 0;
+    let total_messages = get_value_from_db(&conn, "messages_sent").unwrap();
+    let total_time_online = get_value_from_db(&conn, "total_time_online").unwrap();
+    let uptime = 0; // TODO: implement this
 
     Ok(Json(ServerInfo {
         total_messages,

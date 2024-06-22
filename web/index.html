@@ -308,9 +308,9 @@
         try {
             const response = await fetch('/api/info');
             const data = await response.json();
-            document.getElementById('total-messages').innerText = data.total_messages;
-            document.getElementById('total-time-online').innerText = data.total_time_online;
-            document.getElementById('uptime').innerText = data.uptime;
+            document.getElementById('total-messages').innerText = data.total_messages + ' messages';
+            document.getElementById('total-time-online').innerText = data.total_time_online + ' seconds';
+            document.getElementById('uptime').innerText = data.uptime + ' seconds';
         } catch (error) {
             console.error('Error fetching server info:', error);
         }

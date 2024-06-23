@@ -25,7 +25,11 @@ use crate::commands::get_commands;
 use crate::state::get_active_users;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
-const CONFIG_PATH: &str = "config.toml";
+const CONFIG_PATH: &str = if cfg!(test) {
+    "config-test.toml"
+} else {
+    "config.toml"
+};
 const DB_PATH: &str = if cfg!(test) {
     "netchat-test.db"
 } else {

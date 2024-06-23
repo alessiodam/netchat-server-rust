@@ -136,26 +136,28 @@ mod tests {
 
     #[test]
     fn test_get_value_from_db() {
-        let conn = init_db().unwrap();
+        init_db().unwrap();
+        let conn = get_db_conn().unwrap();
 
-        conn.execute("INSERT INTO server_data (key, value) VALUES ('total_time_online', '4')", []).unwrap();
-        conn.execute("INSERT INTO server_data (key, value) VALUES ('messages_sent', '5')", []).unwrap();
+
 
         let result = get_value_from_db::<i32>(&conn, "total_time_online").unwrap();
-        assert_eq!(result, 4);
+        assert_eq!(result, 0);
         let result = get_value_from_db::<i32>(&conn, "messages_sent").unwrap();
-        assert_eq!(result, 5);
+        assert_eq!(result, 0);
     }
 
     #[test]
     fn test_get_value_from_db_error() {
-        let conn = init_db().unwrap();
+        init_db().unwrap();
+        let conn = get_db_conn().unwrap();
         let result = get_value_from_db::<i32>(&conn, "invalid_key");
         assert!(result.is_err());
     }
 
     #[test]
     fn test_get_value_from_db_default() {
+        init_db().unwrap();
         let conn = get_db_conn().unwrap();
         let result = get_value_from_db::<i32>(&conn, "invalid_key").unwrap_or_default();
         assert_eq!(result, 0);

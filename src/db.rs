@@ -109,6 +109,7 @@ pub fn add_message_to_db(timestamp: i64, username: &str, recipient: &str, messag
         "INSERT INTO messages (timestamp, username, recipient, message) VALUES (?1, ?2, ?3, ?4)",
         params![timestamp, username, recipient, message],
     )?;
+    increment_user_sent_messages(&username).unwrap();
     Ok(())
 }
 
@@ -140,8 +141,6 @@ mod tests {
 
     #[test]
     fn test_add_message_and_fetch() {
-        let conn = init_db().unwrap();
-
         let test_username = "testuser";
 
         add_or_update_user(test_username);

@@ -48,7 +48,19 @@ mod tests {
 
     #[test]
     fn test_config() {
-        let config = get_config().expect("Failed to load config");
+        let config = get_config().unwrap();
+        assert_eq!(config.server.host, "127.0.0.1");
+        assert_eq!(config.server.port, 2052);
+        assert_eq!(config.server.online_mode, false);
+        assert_eq!(config.server.api_key, "");
+        assert_eq!(config.server.protect_server, true);
+        assert_eq!(config.server.server_password, "12345678");
 
+        assert_eq!(config.web.enable, true);
+        assert_eq!(config.web.host, "127.0.0.1");
+        assert_eq!(config.web.port, 2053);
+        assert_eq!(config.web.authentication, true);
+        assert_eq!(config.web.username, "admin");
+        assert_eq!(config.web.password, "admin");
     }
 }

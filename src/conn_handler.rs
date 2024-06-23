@@ -9,7 +9,7 @@ use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
 use crate::commands::{Command};
-use crate::db::{add_message_to_db, add_or_update_user, get_messages, increment_user_sent_messages, set_user_status, update_user_time_online};
+use crate::db::{add_message_to_db, add_or_update_user, get_messages, set_user_status, update_user_time_online};
 use crate::state::{get_active_connections, get_active_users};
 use crate::textutils::format_outgoing_message;
 
@@ -150,8 +150,7 @@ pub async fn handle_connection(
                             } else {
                                 send_direct_message(recipient, &full_message).await;
                             }
-                            let _ = increment_user_sent_messages(&username);
-                            let _ = add_message_to_db(timestamp, &username, recipient, &command_message);
+                            add_message_to_db(timestamp, &username, recipient, &command_message).unwrap();
                         } else {
                             socket_guard.write_all(b"INVALID_MESSAGE_FORMAT\n").await.unwrap();
                             socket_guard.flush().await.unwrap();

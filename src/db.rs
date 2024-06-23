@@ -1,6 +1,8 @@
 use chrono::Utc;
 use rusqlite::{Connection, params, Result};
 use crate::DB_PATH;
+use crate::textutils::format_outgoing_message;
+use crate::validators::validate_username;
 
 pub fn get_db_conn() -> Result<Connection> {
     Connection::open(DB_PATH)
@@ -108,4 +110,48 @@ pub fn add_message_to_db(timestamp: i64, username: &str, recipient: &str, messag
         params![timestamp, username, recipient, message],
     )?;
     Ok(())
+}
+
+pub fn get_messages(recipient: &str, limit: i64) -> Result<Vec<String>> {
+    if !validate_username(recipient) {
+        return Ok(vec![]);
+    }
+    let conn = get_db_conn()?;
+    let mut stmt = conn.prepare("SELECT timestamp, username, recipient, message FROM messages WHERE recipient = ?1 ORDER BY id DESC LIMIT ?2")?;
+
+    let messages = stmt.query_map(params![recipient, limit], |row| {
+        let timestamp: i64 = row.get(0)?;
+        let username: String = row.get(1)?;
+        let recipient: String = row.get(2)?;
+        let message: String = row.get(3)?;
+        tracing::info!(target: "db", "Got message from {} to {}: {}", username, recipient, message);
+        Ok(format_outgoing_message(&username, &recipient, &message, timestamp))
+    })?;
+
+    let messages: Vec<String> = messages.filter_map(Result::ok).collect();
+    tracing::info!(target: "db", "Total messages fetched: {}", messages.len());
+    Ok(messages)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+
+    #[test]
+    fn test_add_message_and_fetch() {
+        let conn = init_db().unwrap();
+
+        let test_username = "testuser";
+
+        add_or_update_user(test_username);
+        let timestamp = Utc::now().timestamp_millis();
+        add_message_to_db(timestamp, test_username, "global", "Hello, world!").unwrap();
+
+        let messages = get_messages("global", 10).unwrap();
+
+        assert!(!messages.is_empty());
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].contains("Hello, world!"));
+    }
 }

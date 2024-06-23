@@ -41,3 +41,14 @@ impl Config {
 pub fn get_config() -> Result<Config, Box<dyn Error>> {
     Config::load_config()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config() {
+        let config = get_config().expect("Failed to load config");
+
+    }
+}

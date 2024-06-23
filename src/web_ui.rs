@@ -131,20 +131,25 @@ pub async fn run_web_ui(
 
 #[cfg(test)]
 mod tests {
+    use crate::db::init_db;
     use super::*;
 
     #[test]
     fn test_get_value_from_db() {
-        let conn = get_db_conn().unwrap();
-        conn.execute("INSERT INTO server_data (key, value) VALUES ('messages_sent', '0')", []).unwrap();
+        let conn = init_db().unwrap();
+
+        conn.execute("INSERT INTO server_data (key, value) VALUES ('total_time_online', '4')", []).unwrap();
+        conn.execute("INSERT INTO server_data (key, value) VALUES ('messages_sent', '5')", []).unwrap();
+
+        let result = get_value_from_db::<i32>(&conn, "total_time_online").unwrap();
+        assert_eq!(result, 4);
         let result = get_value_from_db::<i32>(&conn, "messages_sent").unwrap();
-        println!("Result: {}", result);
-        assert_eq!(result, 0);
+        assert_eq!(result, 5);
     }
 
     #[test]
     fn test_get_value_from_db_error() {
-        let conn = get_db_conn().unwrap();
+        let conn = init_db().unwrap();
         let result = get_value_from_db::<i32>(&conn, "invalid_key");
         assert!(result.is_err());
     }

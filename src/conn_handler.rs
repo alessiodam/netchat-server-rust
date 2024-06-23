@@ -9,8 +9,9 @@ use crate::auth::verify_session;
 use crate::config::Config;
 use crate::validators;
 use crate::commands::{Command};
-use crate::db::{add_message_to_db, add_or_update_user, increment_user_sent_messages, set_user_status, update_user_time_online};
+use crate::db::{add_message_to_db, add_or_update_user, get_messages, increment_user_sent_messages, set_user_status, update_user_time_online};
 use crate::state::{get_active_connections, get_active_users};
+use crate::textutils::format_outgoing_message;
 
 pub async fn handle_connection(
     socket: Arc<Mutex<tokio::net::TcpStream>>,
@@ -50,12 +51,12 @@ pub async fn handle_connection(
                                 username = auth_parts[1].to_string();
                                 let session_token = auth_parts[2].trim();
 
-                                if !validators::validate_username(&username).await {
+                                if !validators::validate_username(&username) {
                                     socket_guard.write_all(b"INVALID_USERNAME\n").await.unwrap();
                                     socket_guard.flush().await.unwrap();
                                     continue;
                                 }
-                                if !validators::validate_session_token(session_token).await {
+                                if !validators::validate_session_token(session_token) {
                                     socket_guard.write_all(b"INVALID_SESSION_TOKEN\n").await.unwrap();
                                     socket_guard.flush().await.unwrap();
                                     continue;
@@ -112,6 +113,24 @@ pub async fn handle_connection(
                             continue;
                         }
 
+                        if message.is_empty() {
+                            socket_guard.write_all(b"EMPTY_MESSAGE\n").await.unwrap();
+                            socket_guard.flush().await.unwrap();
+                            continue;
+                        }
+
+                        if message.starts_with("GET_MESSAGES:") {
+                            let recipient = message.trim_start_matches("GET_MESSAGES:").trim();
+                            let messages = get_messages(recipient, 100).unwrap();
+                            info!(target: "tcpserver", "Sending messages: {:?}", messages);
+                            for message in messages {
+                                info!(target: "tcpserver", "Sending message: {}", message);
+                                socket_guard.write_all(message.as_bytes()).await.unwrap();
+                                socket_guard.flush().await.unwrap();
+                            }
+                            continue
+                        }
+
                         if let Some((recipient, command_message)) = message.split_once(':') {
                             if command_message.starts_with('!') {
                                 let command_name = command_message.split_whitespace().next().unwrap();
@@ -125,7 +144,7 @@ pub async fn handle_connection(
                             }
 
                             let timestamp = Utc::now().timestamp();
-                            let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, command_message);
+                            let full_message = format_outgoing_message(&username, recipient, &command_message, timestamp);
                             if recipient == "global" {
                                 broadcast_message(&full_message).await;
                             } else {

@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NETCHAT Server WebUI</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #0d1117;
+            color: white;
+            display: flex;
+        }
+        .sidebar {
+            width: 60px;
+            background-color: #007BFF;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+        }
+
+        .sidebar img {
+            width: 30px;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .main-content {
+            margin-left: 60px;
+            padding: 20px;
+            width: calc(100% - 60px);
+        }
+
+        .stats, .user-table {
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .stats {
+            display: flex;
+            justify-content: space-between;
+            background-color: #333;
+            border-radius: 10px;
+        }
+
+        .stats div {
+            text-align: center;
+            width: 100%;
+        }
+
+        .user-table {
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-spacing: inherit;
+        }
+
+        th, td {
+            padding: 10px;
+            border: 1px solid #444;
+            text-align: center;
+        }
+
+        .status-online {
+            background-color: #5BCF74;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .status-banned {
+            background-color: black;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .status-offline {
+            background-color: red;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+        }
+
+        .btn-disconnect, .btn-ban, .btn-tempban {
+            color: white;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            border-width: 1px;
+        }
+
+        .btn-disconnect {
+            background-color: rgba(189, 44, 0, 0.15);
+            border-color: rgba(189, 44, 0, 0.4);
+        }
+
+        .btn-ban {
+            background-color: rgb(2, 1, 1);
+            border-color: rgb(10, 9, 9);
+        }
+
+        .btn-tempban {
+            background-color: rgba(187, 128, 9, 0.15);
+            border-color: rgba(187, 128, 9, 0.4);
+        }
+
+        .popup {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .popup-content {
+            background-color: #21262d;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            border-color: #30363d;
+            border: 1px;
+        }
+
+        .popup-content input {
+            padding: 5px;
+            margin: 10px 0;
+            width: 80%;
+        }
+
+        .popup-content button {
+            padding: 10px 20px;
+            margin: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .btn-tempban {
+            background-color: rgba(187, 128, 9, 0.15);
+            border-color: rgba(187, 128, 9, 0.4);
+        }
+
+        .btn-cancel {
+            background-color: rgba(189, 44, 0, 0.15);
+            border-color: rgba(189, 44, 0, 0.4);
+            color: white;
+        }
+
+        th:first-of-type {
+            border-top-left-radius: 10px;
+        }
+
+        th:last-of-type {
+            border-top-right-radius: 10px;
+        }
+
+        tr:last-of-type td:first-of-type {
+            border-bottom-left-radius: 10px;
+        }
+
+        tr:last-of-type td:last-of-type {
+            border-bottom-right-radius: 10px;
+        }
+
+        @keyframes rgb {
+            0% { color: red; }
+            25% { color: yellow; }
+            50% { color: green; }
+            75% { color: blue; }
+            100% { color: purple; }
+        }
+
+        .rgb-effect {
+            animation: rgb 2s infinite;
+        }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <img src="https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/images/icons/info.svg" alt="Quick Info" onclick="showPage('info')">
+    <img src="https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/images/icons/settings.svg" alt="Configuration" onclick="showPage('config')">
+    <img src="https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/images/icons/user.svg" alt="User Management" onclick="showPage('users')">
+    <img src="https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/images/icons/experiment.svg" alt="Experiments" onclick="showPage('experiments')">
+    <a href="https://github.com/tkbstudios/netchat-server-rust" target="_blank">
+        <img src="https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/images/icons/github.svg" alt="GitHub">
+    </a>
+</div>
+<div class="main-content">
+    <div id="info" class="page" style="display: block;">
+        <h1>Quick Info</h1>
+        WIP page
+        <div class="stats">
+            <div>
+                <p>Total Messages</p>
+                <p id="total-messages">Loading...</p>
+            </div>
+            <div>
+                <p>Total Time Online</p>
+                <p id="total-time-online">Loading...</p>
+            </div>
+            <div>
+                <p>Uptime</p>
+                <p id="uptime">Loading...</p>
+            </div>
+        </div>
+    </div>
+    <div id="config" class="page" style="display: none;">
+        <h1>Configuration</h1>
+        WIP page
+        <!-- Configuration content goes here -->
+    </div>
+    <div id="users" class="page" style="display: none;">
+        <h1>User Management</h1>
+        WIP page
+        <div class="user-table">
+            <table>
+                <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Status</th>
+                    <th>Last Online</th>
+                    <th>Messages Sent</th>
+                    <th>Total Time Online</th>
+                    <th>Permission</th>
+                    <th>Actions</th>
+                </tr>
+                </thead>
+                <tbody id="user-table-body">
+                <tr>
+                    <td colspan="8">Loading...</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div id="experiments" class="page" style="display: none;">
+        <h1>Experiments</h1>
+        WIP page
+        <!-- Experiments content goes here -->
+    </div>
+</div>
+
+<!-- Ban Confirmation Popup -->
+<div id="banPopup" class="popup">
+    <div class="popup-content">
+        <p style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; font-weight: bold;">Are you sure you want to ban this user?</p>
+        <button id="confirmBan" class="btn-ban">Yes, Ban</button>
+        <button class="btn-cancel" onclick="closePopup('banPopup')">Cancel</button>
+    </div>
+</div>
+
+<!-- Temp-Ban Duration Popup -->
+<div id="tempBanPopup" class="popup">
+    <div class="popup-content">
+        <p style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif; font-weight: bold;">Enter the duration for the temporary ban (in hours):</p>
+        <input type="number" id="tempBanDuration" min="1" max="999">
+        <button id="confirmTempBan" class="btn-tempban">Temp-Ban</button>
+        <button class="btn-cancel" onclick="closePopup('tempBanPopup')">Cancel</button>
+    </div>
+</div>
+
+<script>
+    document.getElementById('confirmBan').addEventListener('click', () => {
+        // Implement ban logic here
+        closePopup('banPopup');
+    });
+
+    document.getElementById('confirmTempBan').addEventListener('click', () => {
+        const duration = document.getElementById('tempBanDuration').value;
+        if (duration) {
+            // Implement temp-ban logic here
+            closePopup('tempBanPopup');
+        }
+    });
+
+    function closePopup(popupId) {
+        document.getElementById(popupId).style.display = 'none';
+    }
+
+    function showPage(pageId) {
+        localStorage.setItem('activePage', pageId);
+
+        document.querySelectorAll('.page').forEach(page => {
+            page.style.display = 'none';
+        });
+        document.getElementById(pageId).style.display = 'block';
+    }
+
+    function loadActivePage() {
+        const activePage = localStorage.getItem('activePage') || 'info';
+        showPage(activePage);
+    }
+
+    async function fetchServerInfo() {
+        try {
+            const response = await fetch('/api/info');
+            const data = await response.json();
+            document.getElementById('total-messages').innerText = data.total_messages + ' messages';
+            document.getElementById('total-time-online').innerText = data.total_time_online + ' seconds';
+            document.getElementById('uptime').innerText = data.uptime + ' seconds';
+        } catch (error) {
+            console.error('Error fetching server info:', error);
+        }
+    }
+
+    async function fetchUsers() {
+        try {
+            const response = await fetch('/api/users');
+            const users = await response.json();
+            const userTableBody = document.getElementById('user-table-body');
+            userTableBody.innerHTML = ''; // Clear the table body
+
+            users.forEach(user => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${user.username}</td>
+                    <td><span class="status-${user.status.toLowerCase()}">${user.status}</span></td>
+                    <td>${user.last_online}</td>
+                    <td>${user.messages_sent}</td>
+                    <td>${user.total_time_online}</td>
+                    <td>${user.permission}</td>
+                    <td>
+                        <button class="btn-disconnect">Disconnect</button>
+                        <button class="btn-ban">Ban</button>
+                        <button class="btn-tempban">Temp-Ban</button>
+                    </td>
+                `;
+                if (user.username === 'Log4Bot' || user.username === 'tkbstudios' || user.username === 'Log4Jake') {
+                    row.classList.add('rgb-effect');
+                }
+                userTableBody.appendChild(row);
+            });
+
+            // Attach event listeners to the dynamically created buttons
+            document.querySelectorAll('.btn-ban').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.getElementById('banPopup').style.display = 'flex';
+                });
+            });
+
+            document.querySelectorAll('.btn-tempban').forEach(button => {
+                button.addEventListener('click', () => {
+                    document.getElementById('tempBanPopup').style.display = 'flex';
+                });
+            });
+
+        } catch (error) {
+            console.error('Error fetching users:', error);
+        }
+    }
+
+    // Load the active tab on page load
+    window.onload = loadActivePage;
+    fetchServerInfo();
+    fetchUsers();
+</script>
+
+</body>
+</html>

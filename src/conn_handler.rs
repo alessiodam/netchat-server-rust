@@ -1,27 +1,28 @@
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::Mutex;
 use tokio::time::{self, Duration};
 use std::sync::Arc;
 use tracing::{info, warn, error};
 use std::collections::HashMap;
 use chrono::Utc;
-
 use crate::auth::verify_session;
 use crate::config::Config;
-
-pub type ChatRooms = Arc<RwLock<HashMap<String, Vec<Arc<Mutex<tokio::net::TcpStream>>>>>>;
-pub type ActiveUsers = Arc<RwLock<HashMap<String, Arc<Mutex<tokio::net::TcpStream>>>>>;
+use crate::validators;
+use crate::commands::{Command};
+use crate::db::{add_message_to_db, add_or_update_user, get_messages, set_user_status, update_user_time_online};
+use crate::state::{get_active_connections, get_active_users};
+use crate::textutils::format_outgoing_message;
 
 pub async fn handle_connection(
     socket: Arc<Mutex<tokio::net::TcpStream>>,
-    active_connections: Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
-    active_users: ActiveUsers,
     config: Config,
+    commands: HashMap<&str, Box<dyn Command>>,
 ) {
     let mut buf = vec![0; 4 * 1024];
     let mut authenticated = false;
     let mut username = String::new();
     let mut server_password_correct = if config.server.protect_server { false } else { true };
+    let start_time = Utc::now().timestamp();
 
     loop {
         let mut socket_guard = socket.lock().await;
@@ -50,6 +51,17 @@ pub async fn handle_connection(
                                 username = auth_parts[1].to_string();
                                 let session_token = auth_parts[2].trim();
 
+                                if !validators::validate_username(&username) {
+                                    socket_guard.write_all(b"INVALID_USERNAME\n").await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
+                                if !validators::validate_session_token(session_token) {
+                                    socket_guard.write_all(b"INVALID_SESSION_TOKEN\n").await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
+
                                 if config.server.online_mode {
                                     info!(target: "auth", "Authenticating user: {}", username);
 
@@ -60,7 +72,9 @@ pub async fn handle_connection(
                                                 socket_guard.flush().await.unwrap();
                                             } else {
                                                 authenticated = true;
+                                                add_or_update_user(&username);
                                                 {
+                                                    let active_users = get_active_users();
                                                     let mut users = active_users.write().await;
                                                     users.insert(username.clone(), Arc::clone(&socket));
                                                 }
@@ -77,7 +91,9 @@ pub async fn handle_connection(
                                 } else {
                                     info!(target: "auth", "Server not in online mode, marking user: {} as authenticated", username);
                                     authenticated = true;
+                                    add_or_update_user(&username);
                                     {
+                                        let active_users = get_active_users();
                                         let mut users = active_users.write().await;
                                         users.insert(username.clone(), Arc::clone(&socket));
                                     }
@@ -96,14 +112,45 @@ pub async fn handle_connection(
                             socket_guard.flush().await.unwrap();
                             continue;
                         }
-                        if let Some((recipient, message)) = message.split_once(':') {
-                            let timestamp = Utc::now().to_rfc3339();
-                            let full_message = format!("{}:{}:{}:{}", timestamp, username, recipient, message);
-                            if recipient == "global" {
-                                broadcast_message(&active_connections, &full_message).await;
-                            } else {
-                                send_direct_message(&active_users, recipient, &full_message).await;
+
+                        if message.is_empty() {
+                            socket_guard.write_all(b"EMPTY_MESSAGE\n").await.unwrap();
+                            socket_guard.flush().await.unwrap();
+                            continue;
+                        }
+
+                        if message.starts_with("GET_MESSAGES:") {
+                            let recipient = message.trim_start_matches("GET_MESSAGES:").trim();
+                            let messages = get_messages(recipient, 100).unwrap();
+                            info!(target: "tcpserver", "Sending messages: {:?}", messages);
+                            for message in messages {
+                                info!(target: "tcpserver", "Sending message: {}", message);
+                                socket_guard.write_all(message.as_bytes()).await.unwrap();
+                                socket_guard.flush().await.unwrap();
                             }
+                            continue
+                        }
+
+                        if let Some((recipient, command_message)) = message.split_once(':') {
+                            if command_message.starts_with('!') {
+                                let command_name = command_message.split_whitespace().next().unwrap();
+                                let args: Vec<&str> = command_message.split_whitespace().skip(1).collect();
+                                if let Some(command) = commands.get(command_name) {
+                                    let response = command.execute(&args).await;
+                                    socket_guard.write_all(&response).await.unwrap();
+                                    socket_guard.flush().await.unwrap();
+                                    continue;
+                                }
+                            }
+
+                            let timestamp = Utc::now().timestamp();
+                            let full_message = format_outgoing_message(&username, recipient, &command_message, timestamp);
+                            if recipient == "global" {
+                                broadcast_message(&full_message).await;
+                            } else {
+                                send_direct_message(recipient, &full_message).await;
+                            }
+                            add_message_to_db(timestamp, &username, recipient, &command_message).unwrap();
                         } else {
                             socket_guard.write_all(b"INVALID_MESSAGE_FORMAT\n").await.unwrap();
                             socket_guard.flush().await.unwrap();
@@ -145,41 +192,50 @@ pub async fn handle_connection(
     });
 
     {
+        let active_connections = get_active_connections();
         let mut conns = active_connections.write().await;
         if let Some(pos) = conns.iter().position(|x| Arc::ptr_eq(x, &socket)) {
             conns.remove(pos);
         }
     }
     {
+        let active_users = get_active_users();
         let mut users = active_users.write().await;
         users.remove(&username);
     }
+
+    let _ = set_user_status(&username, "offline");
+    let _ = update_user_time_online(&username, Utc::now().timestamp() - start_time);
 }
 
-async fn broadcast_message(
-    active_connections: &Arc<RwLock<Vec<Arc<Mutex<tokio::net::TcpStream>>>>>,
-    message: &str,
-) {
+async fn broadcast_message(message: &str) {
     info!(target: "server", "Broadcasting message: {}", message);
 
-    let connections = active_connections.read().await;
+    let connections = get_active_connections();
+    let connections = connections.read().await;
+    let active_users = get_active_users();
+    let active_users = active_users.read().await;
+
     for client in connections.iter() {
-        let client = client.clone();
-        let message = message.to_string();
-        info!(target: "server", "Sending to client: {:?}", client);
-        tokio::spawn(async move {
-            let mut client = client.lock().await;
-            if let Err(e) = client.write_all(message.as_bytes()).await {
-                error!(target: "server", "Failed to send message: {}", e);
-            } else {
-                let _ = client.flush().await;
-                info!(target: "server", "Broadcasted message: {}", message);
-            }
-        });
+        if active_users.values().any(|user| Arc::ptr_eq(user, client)) {
+            let client = client.clone();
+            let message = message.to_string();
+            info!(target: "server", "Sending to client: {:?}", client);
+            tokio::spawn(async move {
+                let mut client = client.lock().await;
+                if let Err(e) = client.write_all(message.as_bytes()).await {
+                    error!(target: "server", "Failed to send message: {}", e);
+                } else {
+                    let _ = client.flush().await;
+                    info!(target: "server", "Broadcasted message: {}", message);
+                }
+            });
+        }
     }
 }
 
-async fn send_direct_message(active_users: &ActiveUsers, target: &str, message: &str) {
+async fn send_direct_message(target: &str, message: &str) {
+    let active_users = get_active_users();
     let active_users = active_users.read().await;
     if let Some(client) = active_users.get(target) {
         let client = client.clone();

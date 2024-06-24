@@ -1,0 +1,15 @@
+[server]
+host = '127.0.0.1'
+port = 2052
+online_mode = false
+api_key = ""
+protect_server = true
+server_password = "12345678"
+
+[web]
+enable = true
+host = "127.0.0.1"
+port = 2053
+authentication = true
+username = "admin"
+password = "admin"

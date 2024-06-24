@@ -1,10 +1,8 @@
 use tokio::net::TcpListener;
 use std::error::Error;
 use tracing_subscriber::fmt;
-use tokio::sync::RwLock;
 use std::sync::Arc;
 use tokio::signal;
-use std::collections::HashMap;
 use tokio::io::AsyncWriteExt;
 use tokio::time::{sleep, Duration};
 use std::fs;
@@ -14,18 +12,38 @@ mod config;
 mod auth;
 mod conn_handler;
 mod web_ui;
+mod db;
+mod validators;
+mod commands;
+mod state;
+mod textutils;
 
 use config::Config;
-use conn_handler::{handle_connection, ActiveUsers, ChatRooms};
+use conn_handler::handle_connection;
+use db::init_db;
+use crate::commands::get_commands;
+use crate::state::get_active_users;
 
 const CONFIG_URL: &str = "https://raw.githubusercontent.com/tkbstudios/netchat-server-rust/master/config.toml.example";
-const CONFIG_PATH: &str = "config.toml";
+const CONFIG_PATH: &str = if cfg!(test) {
+    "config-test.toml"
+} else {
+    "config.toml"
+};
+const DB_PATH: &str = if cfg!(test) {
+    "netchat-test.db"
+} else {
+    "netchat.db"
+};
 
 fn init_tracing() {
     fmt::init();
 }
 
 async fn fetch_and_save_config() -> Result<(), Box<dyn Error + Send + Sync>> {
+    if !DB_PATH.ends_with(".db") {
+        return Err("DB path must end with .db".into());
+    }
     let response = reqwest::get(CONFIG_URL).await?;
     let content = response.text().await?;
     fs::write(CONFIG_PATH, content)?;
@@ -44,13 +62,15 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     let config = Config::load_config().expect("Failed to load config");
+    let config_clone_for_web = config.clone();
 
-    tracing::info!(target: "server", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
+    init_db().expect("Failed to initialize database");
+
+    tracing::info!(target: "tcpserver", "Starting server with online mode: {} on {}:{}", config.server.online_mode, config.server.host, config.server.port);
 
     let listener = TcpListener::bind(format!("{}:{}", config.server.host, config.server.port)).await?;
-    let active_connections = Arc::new(RwLock::new(Vec::new()));
-    let chat_rooms: ChatRooms = Arc::new(RwLock::new(HashMap::new()));
-    let active_users: ActiveUsers = Arc::new(RwLock::new(HashMap::new()));
+    let active_connections = state::get_active_connections();
+    let chat_rooms = state::get_chat_rooms();
 
     {
         let mut chat_rooms = chat_rooms.write().await;
@@ -58,38 +78,38 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     }
 
     if config.web.enable {
-        let web_host = config.web.host.clone();
-        let web_port = config.web.port;
-        let active_connections = Arc::clone(&active_connections);
-        let active_users = Arc::clone(&active_users);
-        let config_clone = config.clone();
         tokio::spawn(async move {
-            web_ui::run_web_ui(web_host, web_port, active_connections, active_users, config_clone).await;
+            web_ui::run_web_ui(config_clone_for_web).await;
         });
     }
 
-    tokio::spawn(remove_non_authenticated_connections(active_connections.clone(), active_users.clone()));
+    tokio::spawn(remove_non_authenticated_connections());
 
     loop {
         tokio::select! {
             Ok((socket, _)) = listener.accept() => {
-                tracing::info!(target: "server", "New connection accepted");
+                tracing::info!(target: "tcpserver", "New connection accepted");
 
-                let active_connections = active_connections.clone();
-                let active_users = active_users.clone();
-                let config_clone = config.clone();
                 let socket = Arc::new(tokio::sync::Mutex::new(socket));
+                let commands_clone = get_commands();
 
                 {
                     let mut conns = active_connections.write().await;
                     conns.push(socket.clone());
                 }
 
-                tokio::spawn(handle_connection(socket, active_connections, active_users, config_clone));
+                let config_clone = config.clone();
+                tokio::spawn(handle_connection(
+                    socket,
+                    config_clone,
+                    commands_clone
+                ));
             },
+
             _ = signal::ctrl_c() => {
                 tracing::info!("Shutdown signal received, notifying all clients...");
 
+                let active_connections = state::get_active_connections();
                 let conns = active_connections.read().await;
                 for conn in conns.iter() {
                     let conn = conn.clone();
@@ -110,13 +130,12 @@ async fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
     Ok(())
 }
 
-async fn remove_non_authenticated_connections(
-    active_connections: Arc<RwLock<Vec<Arc<tokio::sync::Mutex<tokio::net::TcpStream>>>>>,
-    active_users: ActiveUsers,
-) {
+async fn remove_non_authenticated_connections() {
     loop {
         sleep(Duration::from_secs(60)).await;
         let mut connections_to_remove = Vec::new();
+        let active_users = get_active_users();
+        let active_connections = state::get_active_connections();
         {
             let active_users = active_users.read().await;
             let active_connections = active_connections.read().await;
@@ -127,6 +146,7 @@ async fn remove_non_authenticated_connections(
             }
         }
         for index in connections_to_remove.iter().rev() {
+            let active_connections = state::get_active_connections();
             let mut conns = active_connections.write().await;
             let conn = conns.remove(*index);
             {

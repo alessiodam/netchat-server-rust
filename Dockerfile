@@ -19,13 +19,13 @@ RUN rustup target add $TARGET && \
     fi && \
     cargo build --release --locked --target $TARGET
 
-FROM debian:buster-slim
+FROM ubuntu:latest
 
 ARG TARGET
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y libssl-dev
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/${TARGET}/release/netchat-server /usr/local/bin/netchat-server
 COPY --from=builder /app/config.toml /app/config.toml

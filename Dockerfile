@@ -7,6 +7,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y pkg-config libssl-dev gcc-aarch64-linux-gnu
 
 COPY . .
+RUN mv config.toml.example config.toml
 
 RUN rustup target add $TARGET && \
     if [ "$TARGET" = "aarch64-unknown-linux-gnu" ]; then \

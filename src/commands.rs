@@ -11,9 +11,9 @@ pub fn get_commands() -> HashMap<&'static str, Box<dyn Command>> {
     let mut commands: HashMap<&'static str, Box<dyn Command>> = HashMap::new();
 
     // put commands here
-    commands.insert("!perf", Box::new(PerfCommand));
-    commands.insert("!list", Box::new(ListCommand));
-    commands.insert("!ping", Box::new(PingCommand));
+    commands.insert("?perf", Box::new(PerfCommand));
+    commands.insert("?list", Box::new(ListCommand));
+    commands.insert("?ping", Box::new(PingCommand));
 
     commands
 }

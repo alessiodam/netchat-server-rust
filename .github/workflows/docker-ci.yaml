@@ -40,12 +40,6 @@ jobs:
         id: arch-check
         run: echo "Architecture is ${{ matrix.architecture }}"
 
-      - name: Build
-        if: ${{ matrix.architecture == 'amd64' }}
-        run: |
-          rustup target add ${{ matrix.target }}
-          cargo build --release --locked --target ${{ matrix.target }}
-
       - name: Build Docker image
         if: ${{ matrix.architecture == 'amd64' }}
         run: |

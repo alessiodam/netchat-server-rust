@@ -6,5 +6,4 @@ services:
             - "2053:2053/tcp"
         volumes:
           - ./config.toml:/app/config.toml
-          - ./netchat.db:/app/netchat.db
         restart: always

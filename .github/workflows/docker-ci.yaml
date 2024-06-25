@@ -1,0 +1,55 @@
+name: Publish to GHCR
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  packages: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        architecture: [amd64, arm64]
+        include:
+          - architecture: amd64
+            target: x86_64-unknown-linux-gnu
+          - architecture: arm64
+            target: aarch64-unknown-linux-gnu
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Build Docker image
+        run: |
+          docker build --build-arg TARGET=${{ matrix.target }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest .
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push Docker image
+        run: |
+          docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }}
+          docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest

@@ -132,7 +132,7 @@ pub async fn handle_connection(
                         }
 
                         if let Some((recipient, command_message)) = message.split_once(':') {
-                            if command_message.starts_with('!') {
+                            if command_message.starts_with('?') {
                                 let command_name = command_message.split_whitespace().next().unwrap();
                                 let args: Vec<&str> = command_message.split_whitespace().skip(1).collect();
                                 if let Some(command) = commands.get(command_name) {

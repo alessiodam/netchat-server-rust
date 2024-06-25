@@ -49,7 +49,8 @@ jobs:
       - name: Build Docker image
         if: ${{ matrix.architecture == 'amd64' }}
         run: |
-          docker build --build-arg TARGET=${{ matrix.target }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest .
+          TAG=${{ github.ref_name }}
+          docker build --build-arg TARGET=${{ matrix.target }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${TAG} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest .
 
       - name: Log in to GHCR
         uses: docker/login-action@v2
@@ -61,7 +62,8 @@ jobs:
       - name: Push Docker image
         if: ${{ matrix.architecture == 'amd64' }}
         run: |
-          docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }}
+          TAG=${{ github.ref_name }}
+          docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${TAG}
           docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest
 
       - name: Skip aarch64 build

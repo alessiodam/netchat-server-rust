@@ -27,7 +27,6 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y libssl-dev
 
 COPY --from=builder /app/target/${TARGET}/release/netchat-server /usr/local/bin/netchat-server
-
-COPY --from=builder /app/config /app/config
+COPY --from=builder /app/config.toml /app/config.toml
 
 ENTRYPOINT ["netchat-server"]

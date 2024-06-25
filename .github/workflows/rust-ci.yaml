@@ -38,6 +38,17 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+        if: matrix.os == 'ubuntu-latest'
+
       - name: Build
         run: |
           if [ "${{ matrix.architecture }}" == "arm64" ]; then

@@ -21,20 +21,20 @@ jobs:
           - os: ubuntu-latest
             artifact_name: netchat-server
             asset_name: netchat-server-linux-amd64
-          - os: ubuntu-latest
-            artifact_name: netchat-server
-            asset_name: netchat-server-linux-arm64
-            architecture: arm64
+          # - os: ubuntu-latest
+          #   artifact_name: netchat-server
+          #   asset_name: netchat-server-linux-arm64
+          #   architecture: arm64
           - os: windows-latest
             artifact_name: netchat-server.exe
             asset_name: netchat-server-windows-amd64.exe
           - os: macos-latest
             artifact_name: netchat-server
             asset_name: netchat-server-macos-amd64
-          - os: macos-latest
-            artifact_name: netchat-server
-            asset_name: netchat-server-macos-arm64
-            architecture: arm64
+          # - os: macos-latest
+          #   artifact_name: netchat-server
+          #   asset_name: netchat-server-macos-arm64
+          #   architecture: arm64
 
     steps:
       - uses: actions/checkout@v3

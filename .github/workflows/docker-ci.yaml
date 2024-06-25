@@ -36,12 +36,18 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
 
+      - name: Check architecture
+        id: arch-check
+        run: echo "Architecture is ${{ matrix.architecture }}"
+
       - name: Build
+        if: ${{ matrix.architecture == 'amd64' }}
         run: |
           rustup target add ${{ matrix.target }}
           cargo build --release --locked --target ${{ matrix.target }}
 
       - name: Build Docker image
+        if: ${{ matrix.architecture == 'amd64' }}
         run: |
           docker build --build-arg TARGET=${{ matrix.target }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }} -t ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest .
 
@@ -53,6 +59,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Push Docker image
+        if: ${{ matrix.architecture == 'amd64' }}
         run: |
           docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:${{ github.ref }}
           docker push ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest
+
+      - name: Skip aarch64 build
+        if: ${{ matrix.architecture == 'arm64' }}
+        run: echo "Skipping build for aarch64"

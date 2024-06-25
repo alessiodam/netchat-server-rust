@@ -1,0 +1,13 @@
+services:
+    netchat-server:
+        image: ghcr.io/tkbstudios/netchat-server-rust/netchat-server:latest
+        ports:
+            - "2052:2052/tcp"
+            - "2053:2053/tcp"
+        volumes:
+          - ./config.toml:/app/config.toml
+          - ./netchat.db:/app/netchat.db
+        restart: always
+        cpus: 2
+        mem_limit: 1g
+        mem_reservation: 512m

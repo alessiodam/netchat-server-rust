@@ -27,6 +27,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/*
 
+COPY --from=builder /app/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder /app/target/${TARGET}/release/netchat-server /usr/local/bin/netchat-server
 COPY --from=builder /app/config.toml /app/config.toml
 

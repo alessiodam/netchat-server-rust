@@ -1,5 +1,8 @@
 # NETCHAT Server, in Rust.
 
+# Deprecation warning
+> ⚠️This is now deprecated. It is useless because TINET got discontinued and we have Matrix/IRC anyway.
+
 NETCHAT is a chatting server that uses TINET for authentication.  
 I've chosen to rewrite it in Rust for better performance and just because I like Rust.
 
